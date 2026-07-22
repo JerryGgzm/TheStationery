@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "note": "Pixel asset manifest. Entries are added as assets are generated via PixelLab and downloaded into this folder. Each animation sprite sheet is a single horizontal strip of equal-sized cells.",
+  "assets": {
+    "bookseller_idle_breathing": {
+      "path": "/assets/pixel/characters/bookseller/idle_breathing.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 2,
+      "loop": true,
+      "version": 1
+    },
+    "bookseller_reading_letter": {
+      "path": "/assets/pixel/characters/bookseller/reading_letter.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "bookseller_sorting_books": {
+      "path": "/assets/pixel/characters/bookseller/sorting_books.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 7,
+      "fps": 4,
+      "loop": true,
+      "version": 1
+    },
+    "night_regular_look_out_window": {
+      "path": "/assets/pixel/characters/night_regular/look_out_window.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 7,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "night_regular_reading_letter": {
+      "path": "/assets/pixel/characters/night_regular/reading_letter.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "night_regular_seated_idle": {
+      "path": "/assets/pixel/characters/night_regular/seated_idle.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 2,
+      "loop": true,
+      "version": 1
+    },
+    "night_regular_writing_reply": {
+      "path": "/assets/pixel/characters/night_regular/writing_reply.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 7,
+      "fps": 5,
+      "loop": true,
+      "version": 1
+    },
+    "traveler_adjust_bag": {
+      "path": "/assets/pixel/characters/traveler/adjust_bag.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 7,
+      "fps": 4,
+      "loop": true,
+      "version": 1
+    },
+    "traveler_reading_letter": {
+      "path": "/assets/pixel/characters/traveler/reading_letter.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "traveler_seated_idle": {
+      "path": "/assets/pixel/characters/traveler/seated_idle.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 5,
+      "fps": 2,
+      "loop": true,
+      "version": 1
+    },
+    "traveler_writing_reply": {
+      "path": "/assets/pixel/characters/traveler/writing_reply.png",
+      "frameWidth": 92,
+      "frameHeight": 92,
+      "frameCount": 7,
+      "fps": 5,
+      "loop": true,
+      "version": 1
+    },
+    "cat_sleeping": {
+      "path": "/assets/pixel/cat/sleeping.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 7,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "cat_tail_flick_idle": {
+      "path": "/assets/pixel/cat/tail_flick_idle.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 7,
+      "fps": 4,
+      "loop": true,
+      "version": 1
+    }
+  }
+}

@@ -1,0 +1,28 @@
+:root {
+  --night-bg: #17182b;
+  --shadow-blue: #252a48;
+  --wood: #624536;
+  --lamp: #e6a85c;
+  --paper: #e8d9ba;
+  --accent-red: #8c4f4b;
+  --plant-green: #526b59;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--night-bg);
+  color: var(--paper);
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+/* All pixel art must render crisp, never smoothed. */
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
