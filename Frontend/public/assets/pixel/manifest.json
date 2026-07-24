@@ -118,6 +118,87 @@
       "fps": 4,
       "loop": true,
       "version": 1
+    },
+    "cat_walking_east": {
+      "path": "/assets/pixel/cat/walking_east.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 8,
+      "fps": 8,
+      "loop": true,
+      "version": 1
+    },
+    "cat_walking_west": {
+      "path": "/assets/pixel/cat/walking_west.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 8,
+      "fps": 8,
+      "loop": true,
+      "version": 1
+    },
+    "cat_jump_up_east": {
+      "path": "/assets/pixel/cat/jump_up_east.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 8,
+      "fps": 10,
+      "loop": false,
+      "version": 1
+    },
+    "cat_jump_up_west": {
+      "path": "/assets/pixel/cat/jump_up_west.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 8,
+      "fps": 10,
+      "loop": false,
+      "version": 1
+    },
+    "cat_paw_letter": {
+      "path": "/assets/pixel/cat/paw_letter.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 7,
+      "fps": 5,
+      "loop": true,
+      "version": 1
+    },
+    "cat_stretching": {
+      "path": "/assets/pixel/cat/stretching.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 9,
+      "fps": 6,
+      "loop": false,
+      "version": 1
+    },
+    "cat_sleep_flat": {
+      "path": "/assets/pixel/cat/sleep_flat.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 7,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "cat_sleep_belly_east": {
+      "path": "/assets/pixel/cat/sleep_belly_east.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 10,
+      "fps": 3,
+      "loop": true,
+      "version": 1
+    },
+    "cat_sleep_belly": {
+      "path": "/assets/pixel/cat/sleep_belly.png",
+      "frameWidth": 68,
+      "frameHeight": 68,
+      "frameCount": 10,
+      "fps": 3,
+      "loop": true,
+      "version": 1
     }
   }
 }

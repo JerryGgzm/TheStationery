@@ -37,6 +37,12 @@ const ANIM_HINTS = {
   sleeping: { fps: 3, loop: true },
   tail_flick_idle: { fps: 4, loop: true },
   walking: { fps: 8, loop: true },
+  stretching: { fps: 6, loop: false },
+  jump_up: { fps: 10, loop: false },
+  paw_letter: { fps: 5, loop: true },
+  sleep_curled: { fps: 3, loop: true },
+  sleep_flat: { fps: 3, loop: true },
+  sleep_belly: { fps: 3, loop: true },
 };
 
 function readPng(file) {
@@ -91,30 +97,41 @@ function main() {
     if (!fs.existsSync(animsRoot)) continue;
 
     for (const animName of fs.readdirSync(animsRoot)) {
-      const southDir = path.join(animsRoot, animName, "south");
-      if (!fs.existsSync(southDir)) continue;
-      const frames = listFrames(southDir);
-      if (frames.length === 0) continue;
+      const animDir = path.join(animsRoot, animName);
+      if (!fs.statSync(animDir).isDirectory()) continue;
 
-      const { buffer, width, height, count } = stitch(frames);
-      const outDirAbs = path.join(publicPixel, actor.outDir);
-      fs.mkdirSync(outDirAbs, { recursive: true });
-      const outFile = path.join(outDirAbs, `${animName}.png`);
-      fs.writeFileSync(outFile, buffer);
+      // Each animation may hold one or more direction subfolders (south, east,
+      // west, ...). "south" keeps the plain key; other directions get a suffix.
+      const dirs = fs
+        .readdirSync(animDir)
+        .filter((d) => fs.statSync(path.join(animDir, d)).isDirectory());
 
-      const key = `${actor.id}_${animName}`;
-      const hint = ANIM_HINTS[animName] || { fps: 4, loop: true };
-      manifest.assets[key] = {
-        path: `/assets/pixel/${actor.outDir}/${animName}.png`,
-        frameWidth: width,
-        frameHeight: height,
-        frameCount: count,
-        fps: hint.fps,
-        loop: hint.loop,
-        version: 1,
-      };
-      produced++;
-      console.log(`✓ ${key}: ${count} frames @ ${width}x${height}`);
+      for (const dir of dirs) {
+        const frames = listFrames(path.join(animDir, dir));
+        if (frames.length === 0) continue;
+
+        const { buffer, width, height, count } = stitch(frames);
+        const suffix = dir === "south" ? "" : `_${dir}`;
+        const outName = `${animName}${suffix}`;
+        const outDirAbs = path.join(publicPixel, actor.outDir);
+        fs.mkdirSync(outDirAbs, { recursive: true });
+        const outFile = path.join(outDirAbs, `${outName}.png`);
+        fs.writeFileSync(outFile, buffer);
+
+        const key = `${actor.id}_${outName}`;
+        const hint = ANIM_HINTS[animName] || { fps: 4, loop: true };
+        manifest.assets[key] = {
+          path: `/assets/pixel/${actor.outDir}/${outName}.png`,
+          frameWidth: width,
+          frameHeight: height,
+          frameCount: count,
+          fps: hint.fps,
+          loop: hint.loop,
+          version: 1,
+        };
+        produced++;
+        console.log(`✓ ${key}: ${count} frames @ ${width}x${height}`);
+      }
     }
   }
 

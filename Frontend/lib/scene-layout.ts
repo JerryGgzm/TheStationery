@@ -24,44 +24,75 @@ export interface ActorPlacement {
   canonical: CanonicalStill;
 }
 
-// Fixed theatrical placement. Left: letter board. Center: writing desk.
-// Right: counter (bookseller). Rear window: night regular. Warm corner: cat.
+// Cat display scale (bigger than 1:1 so the cat reads clearly in the scene).
+export const CAT_SCALE = 1.4;
+// Floor line (feet anchor y) the cat walks along.
+export const CAT_FLOOR_Y = 322;
+
+// MVP scope: the bookstore scene renders ONLY the cat. The three AI characters
+// (bookseller / night_regular / traveler) exist as letter personas but are not
+// drawn in the scene, so no character sprites or static stills are placed here.
 export const ACTORS: ActorPlacement[] = [
-  {
-    id: "bookseller",
-    label: "The Bookseller",
-    x: 540,
-    y: 236,
-    scale: 1,
-    defaultAnimation: "bookseller_idle_breathing",
-    canonical: { path: "/assets/pixel/characters/bookseller/canonical.png", width: 92, height: 92 },
-  },
-  {
-    id: "night_regular",
-    label: "The Night Regular",
-    x: 470,
-    y: 236,
-    scale: 1,
-    defaultAnimation: "night_regular_seated_idle",
-    canonical: { path: "/assets/pixel/characters/night_regular/canonical.png", width: 92, height: 92 },
-  },
-  {
-    id: "traveler",
-    label: "The Traveler",
-    x: 205,
-    y: 268,
-    scale: 1,
-    defaultAnimation: "traveler_seated_idle",
-    canonical: { path: "/assets/pixel/characters/traveler/canonical.png", width: 92, height: 92 },
-  },
   {
     id: "cat",
     label: "The Cat",
     x: 120,
-    y: 318,
-    scale: 1,
+    y: CAT_FLOOR_Y,
+    scale: CAT_SCALE,
     defaultAnimation: "cat_tail_flick_idle",
     canonical: { path: "/assets/pixel/cat/canonical.png", width: 68, height: 68 },
+  },
+];
+
+export type CatFacing = "east" | "west" | "south";
+
+// A place the cat likes to visit. `dwell` is a manifest animation key played
+// while resting there. `elevated` stations sit above the floor and are reached
+// with a jump (e.g. up onto the writing desk).
+export interface CatStation {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  facing: CatFacing;
+  dwell: string;
+  elevated?: boolean;
+}
+
+// Logical 640x360 coordinates, calibrated against the bookstore background video.
+export const CAT_STATIONS: CatStation[] = [
+  {
+    id: "radiator",
+    label: "暖气旁",
+    x: 78,
+    y: CAT_FLOOR_Y,
+    facing: "south",
+    dwell: "cat_sleeping",
+  },
+  {
+    id: "mailbox",
+    label: "邮箱下",
+    x: 135,
+    y: CAT_FLOOR_Y,
+    facing: "south",
+    dwell: "cat_stretching",
+  },
+  {
+    id: "window",
+    label: "窗边",
+    x: 190,
+    y: CAT_FLOOR_Y,
+    facing: "south",
+    dwell: "cat_tail_flick_idle",
+  },
+  {
+    id: "desk",
+    label: "书桌上",
+    x: 270,
+    y: 250,
+    facing: "west",
+    dwell: "cat_paw_letter",
+    elevated: true,
   },
 ];
 

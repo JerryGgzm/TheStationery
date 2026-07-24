@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ClickSound from "@/components/ClickSound";
 
 export const metadata: Metadata = {
   title: "The Stationery — Pixel Bookshop",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <ClickSound />
+        {children}
+      </body>
     </html>
   );
 }
