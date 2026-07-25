@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENE_WIDTH, SCENE_HEIGHT, type PixelManifest } from "@/lib/scene-layout";
+import LetterWriter from "@/components/LetterWriter";
+import LetterWall from "@/components/LetterWall";
+import Correspondence from "@/components/Correspondence";
+import ProfilePanel from "@/components/ProfilePanel";
 
 export type TimeOfDay = "day" | "night";
 
@@ -21,11 +25,15 @@ const FADE_MS = 3000;
 // screen. CJK filenames are percent-encoded for the URL.
 const DESK_VIDEO = encodeURI("/assets/video/展开信纸.mp4");
 const LETTER_BG = encodeURI("/assets/pixel/scene/展开信纸.png");
-// Safety net if the unfold video never fires `ended` (throttled tab / missing file).
+// Plays after the user posts a letter, then returns to the bookstore.
+const MAIL_SENT_VIDEO = encodeURI("/assets/video/mail_sent.mp4");
+// Safety net if a desk video never fires `ended` (throttled tab / missing file).
 const DESK_VIDEO_MAX_MS = 8000;
+const MAIL_SENT_MAX_MS = 12000;
 
 // Clicking the letter wall plays a sound and fades (through black) to the wall
-// of letters for the current time of day (a looping video).
+// of letters. The wall board becomes a dimmed, pixelated-blurred backdrop
+// (same treatment as the writing desk) behind the pinned notes.
 const WALL_SFX = encodeURI("/assets/audio/sound_effect/展开信件墙.MP3");
 const WALL_SFX_VOLUME = 0.85;
 const LETTERWALL: Record<TimeOfDay, string> = {
@@ -33,6 +41,11 @@ const LETTERWALL: Record<TimeOfDay, string> = {
   night: encodeURI("/assets/video/letterwall_night.mp4"),
 };
 const WALL_FADE_MS = 420;
+
+// Clicking the bookshelf (behind the desk) fades to a pile of letters, then the
+// correspondence sorted by sender. The pile image is both the entry splash and
+// (blurred) the backdrop.
+const LETTERPILE = encodeURI("/assets/pixel/scene/letterpile.png");
 
 // Diegetic interaction hints: instead of floating tooltips, each hint reads as a
 // real object in the room — a note pinned to the letter wall, a brass plaque on
@@ -78,6 +91,17 @@ const SCENE_LABELS: SceneLabel[] = [
     text: "Write a letter",
     hover: { x: 214, y: 188, w: 165, h: 112 },
   },
+  {
+    // Central bookshelf behind/above the desk (calibrated from the night scene:
+    // the book-filled shelves sit above the desk, left of the right-hand window).
+    id: "shelf",
+    variant: "plaque",
+    x: 330,
+    y: 96,
+    icon: "\u2263", // ≣ stacked lines → a shelf of letters
+    text: "Past letters",
+    hover: { x: 234, y: 58, w: 190, h: 128 },
+  },
 ];
 
 // A soft warm glow that blooms over the desk lamp when its plaque is hovered.
@@ -100,11 +124,18 @@ export default function BookstorePreview({
   const [audioOn, setAudioOn] = useState(true);
   const [introHint, setIntroHint] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  const [deskPhase, setDeskPhase] = useState<"closed" | "opening" | "open">("closed");
+  const [deskPhase, setDeskPhase] = useState<
+    "closed" | "opening" | "open"
+  >("closed");
+  // Shared "mail sent" animation, triggered by posting a new letter (desk) or a
+  // reply (wall). Whatever is on screen unmounts and this plays over the top.
+  const [sending, setSending] = useState(false);
   const [wallOpen, setWallOpen] = useState(false);
+  const [shelfOpen, setShelfOpen] = useState(false);
   const [veil, setVeil] = useState(0); // black transition veil for the wall view
   const stageRef = useRef<HTMLDivElement>(null);
   const deskVideoRef = useRef<HTMLVideoElement>(null);
+  const sentVideoRef = useRef<HTMLVideoElement>(null);
   const wallSfxRef = useRef<HTMLAudioElement>(null);
   const wallTimers = useRef<number[]>([]);
   const fadeRaf = useRef<number | null>(null);
@@ -194,17 +225,20 @@ export default function BookstorePreview({
     setHovered(hit ? hit.id : null);
   }, []);
 
-  // Fade to black, swap to the wall of letters, then fade back in. Reused for
-  // both entering (open=true) and leaving (open=false) the wall view.
-  const fadeTo = useCallback((open: boolean) => {
-    setVeil(1);
-    wallTimers.current.push(
-      window.setTimeout(() => {
-        setWallOpen(open);
-        wallTimers.current.push(window.setTimeout(() => setVeil(0), 40));
-      }, WALL_FADE_MS),
-    );
-  }, []);
+  // Fade to black, flip an overlay's open state, then fade back in. Reused for
+  // entering/leaving both the letter wall and the correspondence shelf.
+  const fadeToggle = useCallback(
+    (setOpen: (v: boolean) => void, open: boolean) => {
+      setVeil(1);
+      wallTimers.current.push(
+        window.setTimeout(() => {
+          setOpen(open);
+          wallTimers.current.push(window.setTimeout(() => setVeil(0), 40));
+        }, WALL_FADE_MS),
+      );
+    },
+    [],
+  );
 
   const openWall = useCallback(() => {
     const a = wallSfxRef.current;
@@ -213,8 +247,12 @@ export default function BookstorePreview({
       a.volume = WALL_SFX_VOLUME;
       a.play().catch(() => {});
     }
-    fadeTo(true);
-  }, [fadeTo]);
+    fadeToggle(setWallOpen, true);
+  }, [fadeToggle]);
+
+  const openShelf = useCallback(() => {
+    fadeToggle(setShelfOpen, true);
+  }, [fadeToggle]);
 
   useEffect(() => {
     const timers = wallTimers.current;
@@ -226,7 +264,11 @@ export default function BookstorePreview({
   // it can still be petted, and ignore clicks while a transition is running.
   const onStageDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (deskPhase !== "closed" || wallOpen || veil > 0) return;
+      // Ignore stage clicks while any overlay/transition is active — including
+      // the "mail sent" animation — so tapping to skip it can't fall through to
+      // a hotspot (which would wrongly open the desk-writing screen).
+      if (deskPhase !== "closed" || wallOpen || shelfOpen || veil > 0 || sending)
+        return;
       const rect = stageRef.current?.getBoundingClientRect();
       if (!rect || rect.width === 0) return;
       const sx = ((e.clientX - rect.left) / rect.width) * SCENE_WIDTH;
@@ -244,8 +286,9 @@ export default function BookstorePreview({
       );
       if (hit?.id === "desk") setDeskPhase("opening");
       else if (hit?.id === "wall") openWall();
+      else if (hit?.id === "shelf") openShelf();
     },
-    [deskPhase, wallOpen, veil, openWall],
+    [deskPhase, wallOpen, shelfOpen, veil, sending, openWall, openShelf],
   );
 
   // Play the unfold video from the start; force the screen open if it stalls.
@@ -262,6 +305,31 @@ export default function BookstorePreview({
     const t = window.setTimeout(() => setDeskPhase("open"), DESK_VIDEO_MAX_MS);
     return () => window.clearTimeout(t);
   }, [deskPhase]);
+
+  // Play the "mail sent" video (with sound, following the Post click gesture);
+  // return to the bookstore when it ends or if it stalls.
+  useEffect(() => {
+    if (!sending) return;
+    const v = sentVideoRef.current;
+    if (v) {
+      v.currentTime = 0;
+      v.muted = false;
+      v.volume = 1;
+      const p = v.play();
+      if (p) p.catch(() => {});
+    }
+    const t = window.setTimeout(() => setSending(false), MAIL_SENT_MAX_MS);
+    return () => window.clearTimeout(t);
+  }, [sending]);
+
+  // Posting a reply from the wall: drop the wall view and play the shared send
+  // animation, then land back in the bookstore (same flow as posting a letter).
+  const handleReplyPosted = useCallback(() => {
+    setWallOpen(false);
+    setShelfOpen(false);
+    setVeil(0);
+    setSending(true);
+  }, []);
 
   // Reload + play the video whenever the time of day changes (muted autoplay).
   useEffect(() => {
@@ -440,83 +508,75 @@ export default function BookstorePreview({
           {timeOfDay === "night" ? "🌙" : "☀"}
         </button>
 
+        {/* Pixel profile chip (top-left) → profile settings modal. Sits below the
+            full-screen overlays (letter writer / wall / shelf), so it's only
+            reachable from the base bookstore view. */}
+        <ProfilePanel />
+
         {/* Desk → letter-writing screen: unfold video, then the letter surface.
             The still image is mounted under the video so there's no black flash
             when the clip ends and unmounts. */}
-        {deskPhase !== "closed" && (
+        {deskPhase === "opening" && (
           <>
+            {/* Sharp still under the video for a seamless hand-off when it ends. */}
             <img
               src={LETTER_BG}
               alt="Write a letter"
               style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 20 }}
             />
-            {deskPhase === "opening" && (
-              <video
-                ref={deskVideoRef}
-                src={DESK_VIDEO}
-                autoPlay
-                playsInline
-                onEnded={() => setDeskPhase("open")}
-                onError={() => setDeskPhase("open")}
-                style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 21 }}
-              />
-            )}
-            {deskPhase === "open" && (
-              <button
-                type="button"
-                aria-label="返回书店"
-                onClick={() => setDeskPhase("closed")}
-                style={backButtonStyle}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "#d8b26a";
-                  e.currentTarget.style.color = "#fff3d8";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "#9c7b3a";
-                  e.currentTarget.style.color = "#f0e4c6";
-                }}
-              >
-                <span aria-hidden style={{ fontSize: 15, lineHeight: 1 }}>{"\u2039"}</span>
-                Back
-              </button>
-            )}
+            <video
+              ref={deskVideoRef}
+              src={DESK_VIDEO}
+              autoPlay
+              playsInline
+              onEnded={() => setDeskPhase("open")}
+              onError={() => setDeskPhase("open")}
+              style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 21 }}
+            />
           </>
+        )}
+        {deskPhase === "open" && (
+          <LetterWriter
+            bgSrc={LETTER_BG}
+            onClose={() => setDeskPhase("closed")}
+            onPost={() => {
+              setDeskPhase("closed");
+              setSending(true);
+            }}
+          />
+        )}
+        {sending && (
+          <video
+            ref={sentVideoRef}
+            src={MAIL_SENT_VIDEO}
+            autoPlay
+            playsInline
+            onEnded={() => setSending(false)}
+            onError={() => setSending(false)}
+            style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 22 }}
+          />
         )}
 
         {/* Letter wall → wall-of-letters screen (fades through black). */}
         <audio ref={wallSfxRef} src={WALL_SFX} preload="auto" />
         {wallOpen && (
-          <>
-            <video
-              key={timeOfDay}
-              src={LETTERWALL[timeOfDay]}
-              autoPlay
-              muted
-              loop
-              playsInline
-              style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 20 }}
-            />
-            <button
-              type="button"
-              aria-label="返回书店"
-              onClick={() => fadeTo(false)}
-              style={backButtonStyle}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "#d8b26a";
-                e.currentTarget.style.color = "#fff3d8";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#9c7b3a";
-                e.currentTarget.style.color = "#f0e4c6";
-              }}
-            >
-              <span aria-hidden style={{ fontSize: 15, lineHeight: 1 }}>{"\u2039"}</span>
-              Back
-            </button>
-          </>
+          <LetterWall
+            bgSrc={LETTERWALL[timeOfDay]}
+            onClose={() => fadeToggle(setWallOpen, false)}
+            onReplyPosted={handleReplyPosted}
+          />
         )}
 
-        {/* Black transition veil for the wall fade in/out. */}
+        {/* Bookshelf → correspondence by sender (pile splash → blurred bundles). */}
+        {shelfOpen && (
+          <Correspondence
+            pileSrc={LETTERPILE}
+            onClose={() => fadeToggle(setShelfOpen, false)}
+            onReplyPosted={handleReplyPosted}
+          />
+        )}
+
+        {/* Black transition veil for the wall/shelf fade in/out. */}
         <div
           aria-hidden
           style={{
@@ -580,32 +640,6 @@ const plaqueHoverStyle: React.CSSProperties = {
   borderColor: "#d8b26a",
   color: "#fff3d8",
   boxShadow: "0 0 7px rgba(216,178,106,0.55), 0 1px 3px rgba(0,0,0,0.55)",
-};
-
-// Pixel-styled "back" control on the letter screen — walnut plate, brass edge,
-// hard offset shadow, monospace label.
-const backButtonStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 14,
-  left: 14,
-  zIndex: 22,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "7px 13px",
-  background: "linear-gradient(180deg, #3c2b1d 0%, #2a1d13 100%)",
-  color: "#f0e4c6",
-  borderWidth: 2,
-  borderStyle: "solid",
-  borderColor: "#9c7b3a",
-  borderRadius: 3,
-  boxShadow: "2px 2px 0 0 rgba(0,0,0,0.5)",
-  fontFamily: '"Courier New", ui-monospace, monospace',
-  fontSize: 13,
-  fontWeight: 700,
-  letterSpacing: 0.5,
-  cursor: "pointer",
-  transition: "color 150ms ease, border-color 150ms ease",
 };
 
 const cornerButtonStyle: React.CSSProperties = {
