@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BookstorePreview, { type TimeOfDay } from "@/components/BookstorePreview";
 import LoginWindow from "@/components/LoginWindow";
+import { getSupabase } from "@/lib/supabase";
 
 // Full entry flow:
 //   intro   → outdoor video (outside_*.mp4) + pixel login/register window
@@ -52,10 +53,30 @@ export default function BookshopApp() {
   const revealStarted = useRef(false);
   const timers = useRef<number[]>([]);
 
-  // Decide day vs night once, on the client (avoids SSR hydration mismatch).
+  // Decide day vs night once, on the client (avoids SSR hydration mismatch),
+  // and resume an existing Supabase session: if the user is already signed in
+  // (session persisted in localStorage by supabase-js), skip the login/door
+  // sequence and drop straight into the bookstore. We hold the reveal (`ready`)
+  // until this check finishes so the login window never flashes for a returning
+  // visitor.
   useEffect(() => {
     setTimeOfDay(detectTimeOfDay());
-    setReady(true);
+    let alive = true;
+    getSupabase()
+      .auth.getSession()
+      .then(({ data }) => {
+        if (!alive) return;
+        if (data.session) setPhase("inside");
+      })
+      .catch(() => {
+        /* no session / storage blocked — fall through to the login window */
+      })
+      .finally(() => {
+        if (alive) setReady(true);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Unmute the intro/door audio once the user has interacted with the page.

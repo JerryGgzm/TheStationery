@@ -1,39 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  login,
+  normalizeHandle,
+  register,
+  resendConfirmation,
+  USERNAME_RE,
+} from "@/lib/auth";
+import { checkUsernamePublic } from "@/lib/api";
 
 type Mode = "login" | "register";
 
+// Live username-availability states shown under the register handle field.
+type HandleStatus = "idle" | "invalid" | "checking" | "available" | "taken" | "error";
+
 // Pixel-art styled login / register window shown over the outdoor intro video.
-// NOTE: This is UI-only for now — `onEnter` fires on submit so the door-opening
-// sequence can play. Real Supabase auth will be wired in here later.
+// On success `onEnter()` fires so the door-opening sequence can play. Register
+// runs Supabase signUp then bootstraps the profile via PATCH /me/profile.
 export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
+  // Set after a signup that needs email confirmation, so we can offer a
+  // "resend confirmation email" action on the following login screen.
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+
+  const handle = normalizeHandle(username);
+
+  // Debounced live availability check while registering. A stale-response guard
+  // (`cancelled`) keeps fast typing from flashing an out-of-date result.
+  useEffect(() => {
+    if (mode !== "register") {
+      setHandleStatus("idle");
+      return;
+    }
+    if (!handle) {
+      setHandleStatus("idle");
+      return;
+    }
+    if (!USERNAME_RE.test(handle)) {
+      setHandleStatus("invalid");
+      return;
+    }
+    setHandleStatus("checking");
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const { available } = await checkUsernamePublic(handle);
+        if (!cancelled) setHandleStatus(available ? "available" : "taken");
+      } catch {
+        // Couldn't reach the check — don't block signup; the server validates
+        // uniqueness again on register.
+        if (!cancelled) setHandleStatus("error");
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [handle, mode]);
+
+  const handleOk = mode !== "register" || handleStatus === "available" || handleStatus === "error";
 
   const canSubmit =
     email.trim().length > 0 &&
     password.length > 0 &&
-    (mode === "login" || confirm.length > 0);
+    (mode === "login" || (confirm.length > 0 && username.trim().length > 0 && handleOk)) &&
+    !loading;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    if (mode === "register" && password !== confirm) {
-      setError("Passwords do not match.");
-      return;
-    }
     setError(null);
-    // TODO: replace with Supabase auth before playing the door sequence.
-    onEnter();
+    setNotice(null);
+
+    if (mode === "register") {
+      if (password !== confirm) {
+        setError("Passwords do not match.");
+        return;
+      }
+      if (!USERNAME_RE.test(normalizeHandle(username))) {
+        setError("Username: 3–20 chars, start with a letter, letters/digits/_ only.");
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      if (mode === "login") {
+        await login(email.trim(), password);
+        onEnter();
+      } else {
+        const { needsConfirmation } = await register(
+          email.trim(),
+          password,
+          username,
+        );
+        if (needsConfirmation) {
+          setNotice("Check your email to confirm your account, then sign in.");
+          setPendingConfirmEmail(email.trim());
+          setMode("login");
+          setConfirm("");
+        } else {
+          onEnter();
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingConfirmEmail || resending) return;
+    setResending(true);
+    setError(null);
+    try {
+      await resendConfirmation(pendingConfirmEmail);
+      setNotice(`Confirmation email re-sent to ${pendingConfirmEmail}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't resend the email.");
+    } finally {
+      setResending(false);
+    }
   };
 
   const switchMode = (m: Mode) => {
     setMode(m);
     setError(null);
+    setNotice(null);
   };
 
   return (
@@ -67,6 +171,31 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
               style={inputStyle}
             />
           </label>
+
+          {mode === "register" && (
+            <label style={labelStyle}>
+              USERNAME
+              <div style={handleRowStyle}>
+                <span style={atStyle} aria-hidden>
+                  @
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.replace(/^@+/, ""))}
+                  placeholder="yourname"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={20}
+                  aria-invalid={handleStatus === "taken" || handleStatus === "invalid"}
+                  style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+                />
+              </div>
+              <HandleStatusLine status={handleStatus} handle={handle} />
+            </label>
+          )}
 
           <label style={labelStyle}>
             PASSWORD
@@ -103,9 +232,27 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
           )}
 
           {error && <p style={errorStyle}>{error}</p>}
+          {notice && <p style={noticeStyle}>{notice}</p>}
+          {mode === "login" && pendingConfirmEmail && (
+            <p style={resendRowStyle}>
+              Didn&apos;t get it?{" "}
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending}
+                style={linkStyle}
+              >
+                {resending ? "Sending…" : "Resend confirmation email"}
+              </button>
+            </p>
+          )}
 
           <button type="submit" disabled={!canSubmit} style={submitStyle(canSubmit)}>
-            {mode === "login" ? "Enter the Bookstore" : "Create Account"}
+            {loading
+              ? "One moment…"
+              : mode === "login"
+                ? "Enter the Bookstore"
+                : "Create Account"}
           </button>
 
           <div style={dividerStyle}>
@@ -137,6 +284,26 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
   );
 }
 
+// Small hint / availability line under the register handle field.
+function HandleStatusLine({ status, handle }: { status: HandleStatus; handle: string }) {
+  switch (status) {
+    case "invalid":
+      return <span style={{ ...hintStyle, color: DANGER }}>3–20 chars, start with a letter (letters/digits/_).</span>;
+    case "checking":
+      return <span style={hintStyle}>Checking availability…</span>;
+    case "available":
+      return <span style={{ ...hintStyle, color: OK }}>@{handle} is available.</span>;
+    case "taken":
+      return <span style={{ ...hintStyle, color: DANGER }}>@{handle} is already taken.</span>;
+    default:
+      return (
+        <span style={hintStyle}>
+          Others write to you with @{handle || "yourname"}.
+        </span>
+      );
+  }
+}
+
 function EnvelopeIcon() {
   return (
     <svg
@@ -165,6 +332,8 @@ const MUTED = "#9a9078";
 const PAPER = "#e7d8b6";
 const INK = "#3a2c22";
 const BORDER = "rgba(230,168,92,0.55)";
+const OK = "#8fbf6a";
+const DANGER = "#e0897f";
 
 const backdropStyle: React.CSSProperties = {
   position: "absolute",
@@ -240,6 +409,33 @@ const inputStyle: React.CSSProperties = {
   boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)",
 };
 
+const handleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  gap: 6,
+};
+
+const atStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  padding: "0 10px",
+  fontSize: 15,
+  fontWeight: 700,
+  color: INK,
+  background: PAPER,
+  border: "1px solid #b9a577",
+  borderRadius: 4,
+  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)",
+};
+
+const hintStyle: React.CSSProperties = {
+  fontSize: 10.5,
+  letterSpacing: 0.2,
+  fontWeight: 400,
+  color: MUTED,
+  textTransform: "none",
+};
+
 const forgotRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
@@ -251,6 +447,21 @@ const errorStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#e0897f",
   fontWeight: 700,
+  textAlign: "center",
+};
+
+const noticeStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: GOLD_SOFT,
+  fontWeight: 700,
+  textAlign: "center",
+};
+
+const resendRowStyle: React.CSSProperties = {
+  margin: "-4px 0 0",
+  fontSize: 11.5,
+  color: MUTED,
   textAlign: "center",
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import PixelBlurBg from "@/components/PixelBlurBg";
 import {
@@ -14,19 +14,26 @@ import {
   subtitleStyle,
   titleStyle,
 } from "@/components/letterkit";
-import { SAMPLE_LETTERS, getLetter } from "@/lib/letters";
+import {
+  getBoard,
+  openDelivery,
+  replyToDelivery,
+  type BoardDelivery,
+  type OpenedLetter,
+} from "@/lib/api";
 
 // The letter-wall reading experience shown after the wall fade transition.
 // Three views over one dimmed, pixelated-blurred board backdrop:
-//   list   → five pinned notes, each an AI summary (replies carry a red postmark)
-//   detail → the full letter, with a Reply action
-//   reply  → the letter with a fresh sheet to write back on
-// Posting a reply hands off to the parent, which plays the shared "mail sent"
-// animation — the same delivery flow as writing a new letter.
+//   list   → pinned notes from GET /board (each an AI summary; replies get a
+//            red postmark)
+//   detail → the full letter, fetched on open via POST /deliveries/{id}/open
+//   reply  → the letter with a fresh sheet; posting hits
+//            POST /deliveries/{id}/reply, then hands off to the shared "mail
+//            sent" animation via onReplyPosted.
 type View =
   | { kind: "list" }
-  | { kind: "detail"; id: string }
-  | { kind: "reply"; id: string };
+  | { kind: "detail"; deliveryId: string }
+  | { kind: "reply"; deliveryId: string };
 
 export default function LetterWall({
   bgSrc,
@@ -35,9 +42,66 @@ export default function LetterWall({
 }: {
   bgSrc: string;
   onClose: () => void;
-  onReplyPosted: (letterId: string, text: string) => void;
+  onReplyPosted: () => void;
 }) {
   const [view, setView] = useState<View>({ kind: "list" });
+
+  const [deliveries, setDeliveries] = useState<BoardDelivery[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // The opened letter body (fetched lazily when a card is opened).
+  const [letter, setLetter] = useState<OpenedLetter | null>(null);
+  const [letterLoading, setLetterLoading] = useState(false);
+
+  const [posting, setPosting] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getBoard()
+      .then((res) => alive && setDeliveries(res.deliveries))
+      .catch((e) => alive && setLoadError(e?.message || "Couldn't load the wall."));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const open = useCallback(async (deliveryId: string) => {
+    setView({ kind: "detail", deliveryId });
+    setLetter(null);
+    setLetterLoading(true);
+    try {
+      const res = await openDelivery(deliveryId);
+      setLetter(res.letter);
+    } catch (e) {
+      setLetter({
+        id: "",
+        subject: null,
+        title: "Couldn't open this letter",
+        body: (e as Error)?.message || "Please try again.",
+        author_display: null,
+        language_code: "en",
+      });
+    } finally {
+      setLetterLoading(false);
+    }
+  }, []);
+
+  const post = useCallback(
+    async (deliveryId: string, text: string) => {
+      setPosting(true);
+      setReplyError(null);
+      try {
+        await replyToDelivery(deliveryId, text);
+        onReplyPosted();
+      } catch (e) {
+        setReplyError((e as Error)?.message || "Couldn't send your reply.");
+      } finally {
+        setPosting(false);
+      }
+    },
+    [onReplyPosted],
+  );
 
   return (
     <div style={rootStyle}>
@@ -50,36 +114,55 @@ export default function LetterWall({
             <h2 style={titleStyle}>Letters on the wall</h2>
             <p style={subtitleStyle}>Choose one to unfold.</p>
           </header>
-          <div style={gridStyle}>
-            {SAMPLE_LETTERS.map((l) => (
-              <LetterCard
-                key={l.id}
-                letter={l}
-                onOpen={() => setView({ kind: "detail", id: l.id })}
-              />
-            ))}
-          </div>
+
+          {loadError ? (
+            <p style={subtitleStyle}>{loadError}</p>
+          ) : deliveries === null ? (
+            <p style={subtitleStyle}>Gathering letters…</p>
+          ) : deliveries.length === 0 ? (
+            <p style={subtitleStyle}>
+              The wall is quiet for now. Check back soon.
+            </p>
+          ) : (
+            <div style={gridStyle}>
+              {deliveries.map((d) => (
+                <LetterCard
+                  key={d.delivery_id}
+                  item={{ summary: d.summary, seal: d.seal, isReply: d.is_reply }}
+                  onOpen={() => open(d.delivery_id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {view.kind === "detail" && (
         <LetterDetail
-          letter={getLetter(view.id)!}
+          title={letter?.title ?? null}
+          body={letter?.body ?? ""}
+          loading={letterLoading}
           backLabel="Back to letters"
           onBack={() => setView({ kind: "list" })}
-          onReply={() => setView({ kind: "reply", id: view.id })}
+          onReply={() => {
+            setReplyError(null);
+            setView({ kind: "reply", deliveryId: view.deliveryId });
+          }}
           onClose={onClose}
         />
       )}
 
       {view.kind === "reply" && (
         <LetterReply
-          letter={getLetter(view.id)!}
+          title={letter?.title ?? null}
+          body={letter?.body ?? ""}
           backLabel="Back to letters"
           onBack={() => setView({ kind: "list" })}
-          onCancel={() => setView({ kind: "detail", id: view.id })}
+          onCancel={() => setView({ kind: "detail", deliveryId: view.deliveryId })}
           onClose={onClose}
-          onPost={(text) => onReplyPosted(view.id, text)}
+          onPost={(text) => post(view.deliveryId, text)}
+          posting={posting}
+          error={replyError}
         />
       )}
     </div>

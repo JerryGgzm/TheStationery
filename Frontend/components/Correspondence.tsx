@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import PixelBlurBg from "@/components/PixelBlurBg";
 import {
@@ -17,25 +17,80 @@ import {
   rootStyle,
   subtitleStyle,
   titleStyle,
+  type BundleTie as TieKind,
+  type LetterSeal,
 } from "@/components/letterkit";
 import {
-  CORRESPONDENTS,
-  getCorrespondent,
-  type BundleTie as TieKind,
-  type Correspondent,
-} from "@/lib/letters";
+  getConversation,
+  getMailbox,
+  postMessage,
+  type Bundle,
+  type ConversationThread,
+} from "@/lib/api";
 
-// The bookshelf behind the desk: past letters grouped by the person who sent
-// them. A brief sharp "pile of letters" splash fades into the sorted bundles.
-//   bundles → one card per correspondent (name + count)
-//   letters → that person's letters (reusing the wall's card/detail/reply)
-//   detail / reply → shared reader
+// The bookshelf behind the desk: past conversations grouped by the person you're
+// writing with. A brief sharp "pile of letters" splash fades into the sorted
+// bundles.
+//   bundles → one card per conversation (GET /mailbox: name + message count)
+//   thread  → that conversation's messages (GET /conversations/{id})
+//   detail  → the full message on a sheet
+//   reply   → POST /conversations/{id}/messages, then the shared send animation
 const INTRO_HOLD_MS = 480; // how long the sharp pile stays before fading
 const INTRO_FADE_MS = 420;
 
+const SEALS: LetterSeal[] = ["wax", "clip", "pin", "tape", "ribbon"];
+
+// Deterministic seal per message id so a note always looks the same.
+function sealFor(id: string): LetterSeal {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return SEALS[h % SEALS.length];
+}
+
+function excerpt(body: string): string {
+  const clean = body.replace(/\s+/g, " ").trim();
+  return clean.length > 96 ? `${clean.slice(0, 96).trimEnd()}…` : clean;
+}
+
+interface ThreadItem {
+  id: string;
+  title: string | null;
+  body: string;
+  seal: LetterSeal;
+  isReply: boolean;
+}
+
+function threadItems(thread: ConversationThread): ThreadItem[] {
+  const items: ThreadItem[] = [];
+  if (thread.root_letter) {
+    items.push({
+      id: thread.root_letter.id,
+      title: thread.root_letter.title,
+      body: thread.root_letter.body,
+      seal: sealFor(thread.root_letter.id),
+      isReply: false,
+    });
+  }
+  for (const m of thread.messages) {
+    items.push({
+      id: m.id,
+      title: null,
+      body: m.body,
+      seal: sealFor(m.id),
+      isReply: m.is_reply,
+    });
+  }
+  return items;
+}
+
+function correspondentName(b: Bundle): string {
+  const c = b.correspondent;
+  return c.display_name || c.username || (c.type === "ai_character" ? "A reader" : "A stranger");
+}
+
 type CView =
   | { kind: "bundles" }
-  | { kind: "letters"; cid: string }
+  | { kind: "thread"; cid: string }
   | { kind: "detail"; cid: string; lid: string }
   | { kind: "reply"; cid: string; lid: string };
 
@@ -46,10 +101,21 @@ export default function Correspondence({
 }: {
   pileSrc: string;
   onClose: () => void;
-  onReplyPosted: (letterId: string, text: string) => void;
+  onReplyPosted: () => void;
 }) {
   const [view, setView] = useState<CView>({ kind: "bundles" });
   const [introGone, setIntroGone] = useState(false);
+
+  const [bundles, setBundles] = useState<Bundle[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Cache of fetched conversation threads, keyed by conversation id.
+  const [threads, setThreads] = useState<Record<string, ConversationThread>>({});
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState<string | null>(null);
+
+  const [posting, setPosting] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   // Let the sharp pile linger a beat, then dissolve into the sorted bundles.
   useEffect(() => {
@@ -57,8 +123,53 @@ export default function Correspondence({
     return () => window.clearTimeout(t);
   }, []);
 
-  const letterFor = (cid: string, lid: string) =>
-    getCorrespondent(cid)?.letters.find((l) => l.id === lid);
+  useEffect(() => {
+    let alive = true;
+    getMailbox()
+      .then((res) => alive && setBundles(res.bundles))
+      .catch((e) => alive && setLoadError(e?.message || "Couldn't load your shelf."));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const openBundle = useCallback(
+    async (cid: string) => {
+      setView({ kind: "thread", cid });
+      if (threads[cid]) return;
+      setThreadLoading(true);
+      setThreadError(null);
+      try {
+        const thread = await getConversation(cid);
+        setThreads((prev) => ({ ...prev, [cid]: thread }));
+      } catch (e) {
+        setThreadError((e as Error)?.message || "Couldn't open this bundle.");
+      } finally {
+        setThreadLoading(false);
+      }
+    },
+    [threads],
+  );
+
+  const post = useCallback(
+    async (cid: string, text: string) => {
+      setPosting(true);
+      setReplyError(null);
+      try {
+        await postMessage(cid, text);
+        onReplyPosted();
+      } catch (e) {
+        setReplyError((e as Error)?.message || "Couldn't send your reply.");
+      } finally {
+        setPosting(false);
+      }
+    },
+    [onReplyPosted],
+  );
+
+  const bundleFor = (cid: string) => bundles?.find((b) => b.conversation_id === cid);
+  const itemFor = (cid: string, lid: string) =>
+    threads[cid] ? threadItems(threads[cid]).find((i) => i.id === lid) : undefined;
 
   return (
     <div style={rootStyle}>
@@ -72,21 +183,36 @@ export default function Correspondence({
             <h2 style={titleStyle}>Your correspondence</h2>
             <p style={subtitleStyle}>Letters gathered by sender.</p>
           </header>
-          <div style={gridStyle}>
-            {CORRESPONDENTS.map((c) => (
-              <BundleCard
-                key={c.id}
-                person={c}
-                onOpen={() => setView({ kind: "letters", cid: c.id })}
-              />
-            ))}
-          </div>
+
+          {loadError ? (
+            <p style={subtitleStyle}>{loadError}</p>
+          ) : bundles === null ? (
+            <p style={subtitleStyle}>Sorting the shelf…</p>
+          ) : bundles.length === 0 ? (
+            <p style={subtitleStyle}>
+              No conversations yet. Reply to a letter to start one.
+            </p>
+          ) : (
+            <div style={gridStyle}>
+              {bundles.map((b) => (
+                <BundleCard
+                  key={b.conversation_id}
+                  name={correspondentName(b)}
+                  count={b.letter_count}
+                  tie={b.tie}
+                  onOpen={() => openBundle(b.conversation_id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {view.kind === "letters" &&
+      {view.kind === "thread" &&
         (() => {
-          const c = getCorrespondent(view.cid)!;
+          const b = bundleFor(view.cid);
+          const name = b ? correspondentName(b) : "Conversation";
+          const items = threads[view.cid] ? threadItems(threads[view.cid]) : [];
           return (
             <div style={contentStyle}>
               <BackLink
@@ -95,50 +221,78 @@ export default function Correspondence({
               />
               <CloseButton onClose={onClose} />
               <header style={{ textAlign: "center", marginBottom: "3cqw" }}>
-                <h2 style={titleStyle}>{c.name}</h2>
+                <h2 style={titleStyle}>{name}</h2>
                 <p style={subtitleStyle}>
-                  {c.letters.length} {c.letters.length === 1 ? "letter" : "letters"}
+                  {items.length} {items.length === 1 ? "letter" : "letters"}
                 </p>
               </header>
-              <div style={gridStyle}>
-                {c.letters.map((l) => (
-                  <LetterCard
-                    key={l.id}
-                    letter={l}
-                    onOpen={() =>
-                      setView({ kind: "detail", cid: c.id, lid: l.id })
-                    }
-                  />
-                ))}
-              </div>
+
+              {threadError ? (
+                <p style={subtitleStyle}>{threadError}</p>
+              ) : threadLoading || !threads[view.cid] ? (
+                <p style={subtitleStyle}>Unfolding the bundle…</p>
+              ) : (
+                <div style={gridStyle}>
+                  {items.map((it) => (
+                    <LetterCard
+                      key={it.id}
+                      item={{
+                        summary: excerpt(it.body),
+                        seal: it.seal,
+                        isReply: it.isReply,
+                      }}
+                      onOpen={() =>
+                        setView({ kind: "detail", cid: view.cid, lid: it.id })
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
 
-      {view.kind === "detail" && (
-        <LetterDetail
-          letter={letterFor(view.cid, view.lid)!}
-          backLabel={`Back to ${getCorrespondent(view.cid)!.name}`}
-          onBack={() => setView({ kind: "letters", cid: view.cid })}
-          onReply={() =>
-            setView({ kind: "reply", cid: view.cid, lid: view.lid })
-          }
-          onClose={onClose}
-        />
-      )}
+      {view.kind === "detail" &&
+        (() => {
+          const it = itemFor(view.cid, view.lid);
+          const name = bundleFor(view.cid)
+            ? correspondentName(bundleFor(view.cid)!)
+            : "conversation";
+          return (
+            <LetterDetail
+              title={it?.title ?? null}
+              body={it?.body ?? ""}
+              backLabel={`Back to ${name}`}
+              onBack={() => setView({ kind: "thread", cid: view.cid })}
+              onReply={() => {
+                setReplyError(null);
+                setView({ kind: "reply", cid: view.cid, lid: view.lid });
+              }}
+              onClose={onClose}
+            />
+          );
+        })()}
 
-      {view.kind === "reply" && (
-        <LetterReply
-          letter={letterFor(view.cid, view.lid)!}
-          backLabel={`Back to ${getCorrespondent(view.cid)!.name}`}
-          onBack={() => setView({ kind: "letters", cid: view.cid })}
-          onCancel={() =>
-            setView({ kind: "detail", cid: view.cid, lid: view.lid })
-          }
-          onClose={onClose}
-          onPost={(text) => onReplyPosted(view.lid, text)}
-        />
-      )}
+      {view.kind === "reply" &&
+        (() => {
+          const it = itemFor(view.cid, view.lid);
+          const name = bundleFor(view.cid)
+            ? correspondentName(bundleFor(view.cid)!)
+            : "conversation";
+          return (
+            <LetterReply
+              title={it?.title ?? null}
+              body={it?.body ?? ""}
+              backLabel={`Back to ${name}`}
+              onBack={() => setView({ kind: "thread", cid: view.cid })}
+              onCancel={() => setView({ kind: "detail", cid: view.cid, lid: view.lid })}
+              onClose={onClose}
+              onPost={(text) => post(view.cid, text)}
+              posting={posting}
+              error={replyError}
+            />
+          );
+        })()}
 
       {/* Sharp pile splash that dissolves into the sorted bundles on entry. */}
       {!introGone && (
@@ -167,10 +321,14 @@ export default function Correspondence({
 /* ----------------------------- bundle card ---------------------------- */
 
 function BundleCard({
-  person,
+  name,
+  count,
+  tie,
   onOpen,
 }: {
-  person: Correspondent;
+  name: string;
+  count: number;
+  tie: TieKind;
   onOpen: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -187,12 +345,12 @@ function BundleCard({
       <span style={{ ...stackLayerStyle, transform: "rotate(2.5deg) translate(4%, -2%)" }} />
       <span style={stackTopStyle} />
 
-      <BundleTieMark kind={person.tie} />
+      <BundleTieMark kind={tie} />
 
       <div style={labelCardStyle}>
-        <div style={nameStyle}>{person.name}</div>
+        <div style={nameStyle}>{name}</div>
         <div style={letterCountStyle}>
-          {person.letters.length} {person.letters.length === 1 ? "letter" : "letters"}
+          {count} {count === 1 ? "letter" : "letters"}
         </div>
         <span style={{ ...openLinkStyle, ...(hover ? { color: INK } : null) }}>
           Open bundle

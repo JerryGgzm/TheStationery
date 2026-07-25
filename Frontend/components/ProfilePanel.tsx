@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ApiError, getMe, patchProfile, uploadAvatar } from "@/lib/api";
+import { USERNAME_RE, changePassword, logout, normalizeHandle } from "@/lib/auth";
+
 // Top-left pixel profile chip + "Profile settings" modal.
 // Styling mirrors the login window (navy panel, gold border + corner squares).
-// UI-only for now: saving updates the on-screen chip; real persistence (username
-// uniqueness check + avatar upload to a Supabase Storage bucket, storing the
-// object path in profiles.avatar_path) is wired in with the backend later.
+// On mount the chip loads the signed-in profile (GET /me). Saving persists the
+// username + avatar via PATCH /me/profile (avatar image is uploaded to the
+// Supabase Storage `avatars` bucket first) and changes the password through
+// Supabase Auth.
 
-// Unique handle rules — kept in sync with profiles.username / the letter recipient
-// field: 3–20 chars, start with a letter, then letters / digits / underscore.
-const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/;
 const MIN_PASSWORD = 8;
 
 const NAVY = "#181c31";
@@ -29,20 +30,30 @@ export interface ProfileData {
 }
 
 export default function ProfilePanel({
-  username: initialUsername = "reader",
-  avatarUrl: initialAvatar = null,
   onSave,
 }: {
-  username?: string;
-  avatarUrl?: string | null;
   onSave?: (data: ProfileData) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // Committed values shown on the chip.
+  // Committed values shown on the chip. Populated from GET /me on mount.
   const [profile, setProfile] = useState<ProfileData>({
-    username: initialUsername,
-    avatarUrl: initialAvatar,
+    username: "reader",
+    avatarUrl: null,
   });
+
+  useEffect(() => {
+    let alive = true;
+    getMe()
+      .then((me) => {
+        if (alive) setProfile({ username: me.username, avatarUrl: me.avatar_url });
+      })
+      .catch(() => {
+        /* not signed in / no profile yet — keep the placeholder chip */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <>
@@ -96,9 +107,12 @@ function ProfileModal({
 }) {
   const [username, setUsername] = useState(profile.username);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPass, setNewPass] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Object URL we created here (so we can revoke it and avoid leaks).
   const createdUrl = useRef<string | null>(null);
@@ -125,11 +139,12 @@ function ProfileModal({
     const url = URL.createObjectURL(f);
     createdUrl.current = url;
     setAvatarUrl(url);
+    setAvatarFile(f);
     setError(null);
   }, []);
 
-  const handleSave = useCallback(() => {
-    const handle = username.trim().replace(/^@+/, "");
+  const handleSave = useCallback(async () => {
+    const handle = normalizeHandle(username);
     if (!USERNAME_RE.test(handle)) {
       setError("Username: 3–20 letters, digits or _ (start with a letter).");
       return;
@@ -145,14 +160,52 @@ function ProfileModal({
         return;
       }
     }
-    // Handing off a URL we own would be revoked on unmount, so don't revoke the
-    // one we're committing.
-    if (createdUrl.current && createdUrl.current === avatarUrl) {
-      createdUrl.current = null;
-    }
+
+    setSaving(true);
     setError(null);
-    onSave({ username: handle, avatarUrl });
-  }, [username, newPass, confirm, avatarUrl, onSave]);
+    try {
+      // Upload a new portrait first (Storage), then persist username + path.
+      const patch: { username?: string; avatar_path?: string } = {};
+      if (handle !== normalizeHandle(profile.username)) patch.username = handle;
+      if (avatarFile) patch.avatar_path = await uploadAvatar(avatarFile);
+
+      let committedAvatar = profile.avatarUrl;
+      let committedName = profile.username;
+      if (Object.keys(patch).length > 0) {
+        const me = await patchProfile(patch);
+        committedName = me.username;
+        committedAvatar = me.avatar_url;
+      }
+
+      if (newPass) await changePassword(newPass);
+
+      // Don't revoke the preview URL we may still be showing on the chip.
+      if (createdUrl.current && createdUrl.current === avatarUrl) {
+        createdUrl.current = null;
+      }
+      onSave({ username: committedName, avatarUrl: committedAvatar });
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "username_taken") {
+        setError("That username is already taken.");
+      } else {
+        setError((e as Error)?.message || "Couldn't save your changes.");
+      }
+      setSaving(false);
+    }
+  }, [username, newPass, confirm, avatarFile, avatarUrl, profile, onSave]);
+
+  // Sign out, then reload so the app returns to the intro / login window
+  // (a fresh mount finds no session and shows LoginWindow).
+  const handleLogout = useCallback(async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error)?.message || "Couldn't sign out.");
+      setSigningOut(false);
+    }
+  }, []);
 
   return (
     <div
@@ -256,12 +309,32 @@ function ProfileModal({
           {error && <p style={errorStyle}>{error}</p>}
 
           <div style={footerStyle}>
-            <button type="button" onClick={onClose} style={cancelStyle}>
-              Cancel
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={signingOut || saving}
+              style={signOutStyle}
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
             </button>
-            <button type="button" onClick={handleSave} style={saveStyle}>
-              Save changes
-            </button>
+            <div style={footerRightStyle}>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                style={cancelStyle}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                style={{ ...saveStyle, opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -555,9 +628,28 @@ const errorStyle: React.CSSProperties = {
 const footerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "flex-end",
+  justifyContent: "space-between",
   gap: 18,
   marginTop: 18,
+};
+
+const footerRightStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 18,
+};
+
+const signOutStyle: React.CSSProperties = {
+  background: "none",
+  border: "1px solid rgba(224,137,127,0.5)",
+  padding: "8px 14px",
+  color: "#e0897f",
+  fontFamily: '"Courier New", ui-monospace, monospace',
+  fontSize: 12.5,
+  fontWeight: 700,
+  letterSpacing: 0.3,
+  borderRadius: 4,
+  cursor: "pointer",
 };
 
 const cancelStyle: React.CSSProperties = {

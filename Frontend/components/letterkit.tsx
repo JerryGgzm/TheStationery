@@ -7,7 +7,23 @@
 import { useCallback, useState } from "react";
 
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
-import type { Letter, LetterSeal } from "@/lib/letters";
+
+// Decorative style unions — mirrored on the backend (services/derive.py) so a
+// letter/bundle always renders the same seal/tie.
+export type LetterSeal = "wax" | "clip" | "pin" | "tape" | "ribbon";
+export type BundleTie =
+  | "red-string"
+  | "green-string"
+  | "clip"
+  | "twine-wax"
+  | "green-band";
+
+// Minimal card data (one pinned note / message excerpt).
+export interface CardItem {
+  summary: string | null;
+  seal: LetterSeal;
+  isReply?: boolean;
+}
 
 const MAX_REPLY = 1000;
 const TYPE_SFX = "/assets/audio/sound_effect/打字声.MP3";
@@ -163,10 +179,10 @@ export function Postmark() {
 
 // A pinned note summarizing one letter; replies carry the red postmark.
 export function LetterCard({
-  letter,
+  item,
   onOpen,
 }: {
-  letter: Letter;
+  item: CardItem;
   onOpen: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -183,27 +199,32 @@ export function LetterCard({
         <polyline points="2,2 50,20 98,2" fill="none" stroke="rgba(58,44,34,0.35)" strokeWidth="1.2" />
       </svg>
 
-      <Seal kind={letter.seal} />
-      {letter.isReply && <Postmark />}
+      <Seal kind={item.seal} />
+      {item.isReply && <Postmark />}
 
       <p style={cardSummaryStyle}>
         <span style={{ color: RULE, marginRight: "1cqw" }}>{"\u2726"}</span>
-        {letter.summary}
+        {item.summary ?? "A letter waiting to be read."}
       </p>
       <span style={{ ...readLinkStyle, ...(hover ? { color: INK } : null) }}>Read letter</span>
     </button>
   );
 }
 
-// Full letter on a single sheet, with a Reply action.
+// Full letter on a single sheet, with a Reply action. `body` may arrive after a
+// network fetch, so a loading placeholder is shown until it's ready.
 export function LetterDetail({
-  letter,
+  title,
+  body,
+  loading,
   backLabel,
   onBack,
   onReply,
   onClose,
 }: {
-  letter: Letter;
+  title: string | null;
+  body: string;
+  loading?: boolean;
   backLabel: string;
   onBack: () => void;
   onReply: () => void;
@@ -214,12 +235,17 @@ export function LetterDetail({
       <BackLink label={backLabel} onClick={onBack} />
       <CloseButton onClose={onClose} />
       <article style={{ ...sheetStyle, maxHeight: "90%" }}>
-        <h3 style={letterTitleStyle}>{letter.title}</h3>
+        <h3 style={letterTitleStyle}>{title || "A letter"}</h3>
         <Divider />
-        <div style={letterBodyStyle}>{letter.body}</div>
+        <div style={letterBodyStyle}>{loading ? "Unfolding…" : body}</div>
         <Divider />
         <div style={{ display: "flex", justifyContent: "center", marginTop: "3cqw" }}>
-          <button type="button" onClick={onReply} style={amberButtonStyle(true)}>
+          <button
+            type="button"
+            onClick={onReply}
+            disabled={loading}
+            style={amberButtonStyle(!loading)}
+          >
             Reply
           </button>
         </div>
@@ -232,19 +258,25 @@ export function LetterDetail({
 // The letter (full) above a fresh sheet to write a reply on. The whole page
 // scrolls so the Post reply button is always reachable.
 export function LetterReply({
-  letter,
+  title,
+  body,
   backLabel,
   onBack,
   onCancel,
   onClose,
   onPost,
+  posting,
+  error,
 }: {
-  letter: Letter;
+  title: string | null;
+  body: string;
   backLabel: string;
   onBack: () => void;
   onCancel: () => void;
   onClose: () => void;
   onPost: (text: string) => void;
+  posting?: boolean;
+  error?: string | null;
 }) {
   const [text, setText] = useState("");
   const playKeyClick = useKeyClicks(TYPE_SFX);
@@ -259,7 +291,7 @@ export function LetterReply({
     [playKeyClick],
   );
 
-  const canPost = text.trim().length > 0;
+  const canPost = text.trim().length > 0 && !posting;
 
   return (
     <>
@@ -267,9 +299,9 @@ export function LetterReply({
       <CloseButton onClose={onClose} />
       <div style={replyScrollStyle}>
         <article style={sheetStyle}>
-          <h3 style={letterTitleStyle}>{letter.title}</h3>
+          <h3 style={letterTitleStyle}>{title || "A letter"}</h3>
           <Divider />
-          <div style={letterBodyStyle}>{letter.body}</div>
+          <div style={letterBodyStyle}>{body}</div>
         </article>
 
         <article style={{ ...sheetStyle, marginTop: "3cqw" }}>
@@ -282,14 +314,25 @@ export function LetterReply({
             onKeyDown={handleKeyDown}
             placeholder="Write your reply…"
             spellCheck={false}
+            disabled={posting}
             style={replyTextareaStyle}
           />
+          {error && (
+            <p style={{ margin: "1.5cqw 0 0", color: "#b23a2b", fontSize: "3cqw" }}>
+              {error}
+            </p>
+          )}
           <div style={replyFooterStyle}>
             <span style={countStyle}>
               {text.length} / {MAX_REPLY}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: "4cqw" }}>
-              <button type="button" onClick={onCancel} style={cancelLinkStyle}>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={posting}
+                style={cancelLinkStyle}
+              >
                 Cancel
               </button>
               <button
@@ -298,7 +341,7 @@ export function LetterReply({
                 disabled={!canPost}
                 style={amberButtonStyle(canPost)}
               >
-                Post reply
+                {posting ? "Sending…" : "Post reply"}
               </button>
             </div>
           </div>

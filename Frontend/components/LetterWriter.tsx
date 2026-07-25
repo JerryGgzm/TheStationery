@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import DraftBox from "@/components/DraftBox";
 import PixelBlurBg from "@/components/PixelBlurBg";
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
+import { ApiError, postLetter, saveDraft, type MyLetter } from "@/lib/api";
 
 // The letter-writing surface shown after the desk unfold animation.
 // The desk stays as a dimmed, pixelated-blurred backdrop; the sheet of paper is
 // enlarged as the sole focus and *is* the input area (no extra modal/toolbar).
 // Palette stays no-radius, low-saturation walnut + warm paper.
 const MAX_CHARS = 1000;
-const DRAFT_KEY = "stationery_letter_draft";
+const SUBJECT_MAX = 80;
 const TYPE_SFX = "/assets/audio/sound_effect/打字声.MP3";
 
 // Unique handle rules (kept in sync with the profiles.username design):
@@ -25,6 +27,28 @@ export interface LetterDraft {
   text: string;
   // null when the letter is left for a stranger to find (public model).
   recipient: string | null;
+}
+
+// Turn backend error codes into a short, human line shown under the sheet.
+function postErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    switch (e.code) {
+      case "recipient_not_found":
+        return "No one goes by that @handle.";
+      case "recipient_self":
+        return "You can't write to yourself.";
+      case "recipient_format":
+        return "Handle: 3–20 letters, digits or _.";
+      case "safety_rejected":
+        return "This letter was held back by our gentle safety review.";
+      case "rate_limited":
+        return "You've sent a lot of letters — please try again later.";
+      case "body_length":
+        return "A letter needs between 1 and 10000 characters.";
+    }
+    return e.message;
+  }
+  return (e as Error)?.message || "Couldn't send your letter. Please try again.";
 }
 
 // Warm paper / ink / walnut tokens (kept in sync with the login window).
@@ -47,70 +71,75 @@ export default function LetterWriter({
   onPost?: (draft: LetterDraft) => void;
 }) {
   const [text, setText] = useState("");
+  const [subject, setSubject] = useState("");
   const [to, setTo] = useState("");
-  const [saved, setSaved] = useState(false);
+  // Set when continuing an existing server-side draft, so saving/publishing
+  // updates that row instead of creating a new one.
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftBoxOpen, setDraftBoxOpen] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const savedTimer = useRef<number | null>(null);
   const playKeyClick = useKeyClicks(TYPE_SFX);
 
-  // Restore any saved draft and focus the sheet.
   useEffect(() => {
-    try {
-      const d = window.localStorage.getItem(DRAFT_KEY);
-      if (d) {
-        // Drafts are stored as JSON { text, recipient }; fall back to treating a
-        // bare string as legacy body-only drafts.
-        try {
-          const parsed = JSON.parse(d) as Partial<LetterDraft>;
-          if (parsed && typeof parsed === "object") {
-            if (typeof parsed.text === "string") setText(parsed.text);
-            if (typeof parsed.recipient === "string") setTo(parsed.recipient);
-          } else {
-            setText(d);
-          }
-        } catch {
-          setText(d);
-        }
-      }
-    } catch {
-      // ignore storage errors (private mode, etc.)
-    }
     taRef.current?.focus();
-    return () => {
-      if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
-    };
   }, []);
 
-  const flashSaved = useCallback(() => {
-    setSaved(true);
-    if (savedTimer.current != null) window.clearTimeout(savedTimer.current);
-    savedTimer.current = window.setTimeout(() => setSaved(false), 1600);
+  const handleContinueDraft = useCallback((d: MyLetter) => {
+    setText(d.body);
+    setSubject(d.subject ?? "");
+    setTo(d.recipient_username ?? "");
+    setDraftId(d.letter_id);
+    setDraftBoxOpen(false);
+    setPostError(null);
   }, []);
 
-  const handleSaveDraft = useCallback(() => {
-    try {
-      const draft: LetterDraft = { text, recipient: to.trim() || null };
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch {
-      // ignore
-    }
-    flashSaved();
-  }, [text, to, flashSaved]);
-
-  const handlePost = useCallback(() => {
-    if (text.trim().length === 0) return;
+  const handlePutInDrafts = useCallback(async () => {
+    if (text.trim().length === 0 || savingDraft || posting) return;
     const handle = normalizeHandle(to);
     if (handle && !USERNAME_RE.test(handle)) return;
-    // Backend delivery is wired later; clear the local draft and hand the
-    // normalised recipient (null = public) to the parent, which plays the
-    // "mail sent" animation and closes.
+    setSavingDraft(true);
+    setPostError(null);
     try {
-      window.localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      // ignore
+      await saveDraft({
+        draftId,
+        body: text,
+        subject: subject.trim() || null,
+        recipient_username: handle || null,
+      });
+      // Save-and-close: tuck it away and return to the bookstore.
+      onClose();
+    } catch (e) {
+      setPostError(postErrorMessage(e));
+      setSavingDraft(false);
     }
-    onPost?.({ text, recipient: handle || null });
-  }, [text, to, onPost]);
+  }, [text, subject, to, draftId, savingDraft, posting, onClose]);
+
+  const handlePost = useCallback(async () => {
+    if (text.trim().length === 0 || posting) return;
+    const handle = normalizeHandle(to);
+    if (handle && !USERNAME_RE.test(handle)) return;
+
+    setPosting(true);
+    setPostError(null);
+    try {
+      // Update/create the draft then publish it (safety review + AI summary run
+      // on publish). On success, hand off to the parent, which plays the shared
+      // "mail sent" animation and closes.
+      await postLetter({
+        draftId,
+        body: text,
+        subject: subject.trim() || null,
+        recipient_username: handle || null,
+      });
+      onPost?.({ text, recipient: handle || null });
+    } catch (e) {
+      setPostError(postErrorMessage(e));
+      setPosting(false);
+    }
+  }, [text, subject, to, draftId, posting, onPost]);
 
   // One keystroke → one click. Skip modifiers/navigation and shortcut combos.
   const handleKeyDown = useCallback(
@@ -125,7 +154,7 @@ export default function LetterWriter({
 
   const handle = normalizeHandle(to);
   const recipientInvalid = handle.length > 0 && !USERNAME_RE.test(handle);
-  const canPost = text.trim().length > 0 && !recipientInvalid;
+  const canPost = text.trim().length > 0 && !recipientInvalid && !posting;
 
   return (
     <div style={stageStyle}>
@@ -154,6 +183,25 @@ export default function LetterWriter({
           <span style={dividerLineStyle} />
           <span style={dividerDiamondStyle} />
           <span style={dividerLineStyle} />
+        </div>
+
+        {/* Title / subject — optional; doubles as the draft box label and the
+            heading shown when someone reads the letter. */}
+        <div style={subjectRowStyle}>
+          <input
+            type="text"
+            value={subject}
+            maxLength={SUBJECT_MAX}
+            onChange={(e) => setSubject(e.target.value)}
+            onKeyDown={(e) => {
+              if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1)
+                playKeyClick();
+            }}
+            placeholder="Title (optional)"
+            spellCheck={false}
+            aria-label="Letter title"
+            style={subjectInputStyle}
+          />
         </div>
 
         {/* Address line — optional recipient handle. Blank = left for a stranger. */}
@@ -193,16 +241,23 @@ export default function LetterWriter({
         />
 
         <div style={footerStyle}>
-          <span style={countStyle}>
-            {recipientInvalid
-              ? "Handle: 3–20 letters, digits or _"
-              : saved
-                ? "Draft saved"
-                : `${text.length} / ${MAX_CHARS}`}
+          <span style={{ ...countStyle, ...((postError || recipientInvalid) ? errorTextStyle : null) }}>
+            {postError
+              ? postError
+              : recipientInvalid
+                ? "Handle: 3–20 letters, digits or _"
+                : savingDraft
+                  ? "Tucking into the drawer…"
+                  : `${text.length} / ${MAX_CHARS}`}
           </span>
           <div style={actionsStyle}>
-            <button type="button" onClick={handleSaveDraft} style={saveLinkStyle}>
-              Save draft
+            <button
+              type="button"
+              onClick={handlePutInDrafts}
+              disabled={text.trim().length === 0 || savingDraft || posting}
+              style={saveLinkStyle}
+            >
+              Put in drafts
             </button>
             <button
               type="button"
@@ -210,13 +265,37 @@ export default function LetterWriter({
               disabled={!canPost}
               style={postStyle(canPost)}
             >
-              Post letter
+              {posting ? "Sending…" : "Post letter"}
             </button>
           </div>
         </div>
 
         <span style={foldStyle} aria-hidden />
       </div>
+
+      {/* Drafts drawer on the desk — opens the saved-drafts picker. */}
+      <button
+        type="button"
+        onClick={() => setDraftBoxOpen(true)}
+        style={draftsIconStyle}
+        aria-label="打开草稿箱"
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translateY(-2px)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+      >
+        <span style={draftsDrawerStyle} aria-hidden>
+          <span style={draftsPapersStyle} />
+          <span style={draftsHandleStyle} />
+        </span>
+        <span style={draftsLabelStyle}>Drafts</span>
+      </button>
+
+      {draftBoxOpen && (
+        <DraftBox onClose={() => setDraftBoxOpen(false)} onContinue={handleContinueDraft} />
+      )}
     </div>
   );
 }
@@ -304,6 +383,25 @@ const dividerDiamondStyle: React.CSSProperties = {
   transform: "rotate(45deg)",
 };
 
+const subjectRowStyle: React.CSSProperties = {
+  marginBottom: "2.4cqw",
+  paddingBottom: "1.6cqw",
+  borderBottom: `1px solid ${RULE}`,
+};
+
+const subjectInputStyle: React.CSSProperties = {
+  width: "100%",
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: INK,
+  caretColor: WALNUT,
+  fontFamily: "inherit",
+  fontSize: "4.6cqw",
+  fontWeight: 700,
+  letterSpacing: "0.15cqw",
+};
+
 const toRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "baseline",
@@ -368,6 +466,11 @@ const countStyle: React.CSSProperties = {
   letterSpacing: "0.2cqw",
 };
 
+const errorTextStyle: React.CSSProperties = {
+  color: "#a24a34",
+  fontWeight: 700,
+};
+
 const actionsStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -411,4 +514,65 @@ const foldStyle: React.CSSProperties = {
   height: "5cqw",
   background: "linear-gradient(315deg, #c6b079 0 50%, transparent 50%)",
   boxShadow: "-1px -1px 1px rgba(0,0,0,0.12)",
+};
+
+// Drafts drawer sitting on the desk to the right of the paper.
+const draftsIconStyle: React.CSSProperties = {
+  position: "absolute",
+  zIndex: 2,
+  top: "20%",
+  right: "5%",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 6,
+  background: "transparent",
+  border: "none",
+  cursor: "pointer",
+  transition: "transform 160ms ease",
+};
+
+const draftsDrawerStyle: React.CSSProperties = {
+  position: "relative",
+  display: "block",
+  width: 58,
+  height: 40,
+  background: "linear-gradient(180deg, #6f4f2e 0%, #4a3320 100%)",
+  border: "2px solid #855f38",
+  borderRadius: 3,
+  boxShadow: "0 6px 14px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(202,161,92,0.25)",
+};
+
+// A few sheets of paper peeking out the top of the drawer.
+const draftsPapersStyle: React.CSSProperties = {
+  position: "absolute",
+  top: -7,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: 40,
+  height: 12,
+  background: `linear-gradient(180deg, ${PAPER_TOP} 0%, ${PAPER_BOT} 100%)`,
+  border: "1px solid #c3ab77",
+  borderBottom: "none",
+  boxShadow: "3px -3px 0 -1px #d9c79c, -3px -3px 0 -1px #d9c79c",
+};
+
+const draftsHandleStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 8,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: 22,
+  height: 6,
+  background: AMBER,
+  border: `1px solid ${AMBER_EDGE}`,
+  borderRadius: 2,
+};
+
+const draftsLabelStyle: React.CSSProperties = {
+  color: "#e7d8b3",
+  fontFamily: 'ui-serif, Georgia, "Times New Roman", serif',
+  fontSize: 13,
+  letterSpacing: 0.4,
+  textShadow: "0 1px 3px rgba(0,0,0,0.8)",
 };
