@@ -59,7 +59,7 @@
 
 ## ⚠️ 说明 / 已知边界（非阻塞，产品/运营层后续补）
 
-- **AI 回复入队来源**：目前仅在“用户在 AI 会话里发消息”时自动入队（`conversation_service.post_message`）。“公开信无人回 → 派 AI 角色”这类入队策略需要先在 `ai_characters` / `ai_prompt_versions` 里播种角色与提示词，并确定选角规则，属产品决策，暂未接自动触发；worker 链路已就绪，播种后即可用。
+- **AI 回复入队来源**：两条入队路径均已接通。①“用户在 AI 会话里发消息”→ `conversation_service.post_message`；②“公开信无人回 → 派 AI 角色”→ `POST /internal/jobs/assign-ai-penpals`（`ai_jobs_service.assign_unanswered_letters`）：扫描发布超过 `AI_UNANSWERED_GRACE_HOURS` 仍无会话的公开信，随机选 active 角色入队（幂等）。角色/提示词用 `scripts/seed_ai_characters.py` 播种（夜常客 / 旅人）。选角规则 MVP 为随机，后续可用 `topic_preferences` 升级。
 - **限流存储**：slowapi 用进程内存，Cloud Run 多实例下是“每实例”限额。要全局严格限额需接 Redis（`storage_uri`）。
 - **注册 / Auth 衔接**：前端 `signUp` 成功后调用 `PATCH /me/profile` 完成 username/display_name 引导（后端已支持“无则创建”）。
 - **头像直传**：由前端直传 Storage `avatars` bucket，后端只存/回显 `avatar_path`（已支持）。

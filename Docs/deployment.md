@@ -99,12 +99,15 @@ curl -s "$SERVICE_URL/health"        # {"status":"ok",...}
 
 ## 3. Cloud Scheduler：触发内部后台任务
 
-两个内部端点（挂在根路径，非 `/api/v1`）：
+三个内部端点（挂在根路径，非 `/api/v1`）：
 
 | 端点 | 作用 | 建议频率 |
 |---|---|---|
 | `POST /internal/jobs/deliver-messages` | 到点 `scheduled` 消息 → `delivered` | 每 5 分钟 |
 | `POST /internal/jobs/process-ai-replies` | 抽取到期 `ai_response_jobs` → 生成 AI 回复 | 每 5 分钟 |
+| `POST /internal/jobs/assign-ai-penpals` | 「公开信无人回 → 派 AI」：扫描超过宽限期仍无人回的公开信，入队 AI 回复 job | 每 15 分钟 / 每小时 |
+
+> **前置**：`assign-ai-penpals` 需要至少一个 active AI 角色 + active prompt。首次部署后在数据库跑一次 seed：`PYTHONPATH=. python scripts/seed_ai_characters.py`（或把等价 SQL 贴进 Supabase）。宽限期/回信延迟由 `AI_UNANSWERED_GRACE_HOURS` / `AI_REPLY_MIN_DELAY_MINUTES` / `AI_REPLY_MAX_DELAY_MINUTES` 控制（见 §4）。
 
 调用方需带 `X-Internal-Token: <INTERNAL_JOB_TOKEN>`。让 Scheduler 从 Secret Manager 读同一个值：
 
@@ -120,7 +123,7 @@ gcloud scheduler jobs create http deliver-messages \
   --headers "X-Internal-Token=${JOB_TOKEN}" \
   --attempt-deadline 120s
 
-# AI 回复
+# AI 回复（消费队列）
 gcloud scheduler jobs create http process-ai-replies \
   --location "$REGION" \
   --schedule "*/5 * * * *" \
@@ -128,6 +131,15 @@ gcloud scheduler jobs create http process-ai-replies \
   --http-method POST \
   --headers "X-Internal-Token=${JOB_TOKEN}" \
   --attempt-deadline 300s
+
+# 派 AI 笔友（生产者：给无人回的公开信入队）
+gcloud scheduler jobs create http assign-ai-penpals \
+  --location "$REGION" \
+  --schedule "*/15 * * * *" \
+  --uri "${SERVICE_URL}/internal/jobs/assign-ai-penpals" \
+  --http-method POST \
+  --headers "X-Internal-Token=${JOB_TOKEN}" \
+  --attempt-deadline 120s
 ```
 
 手动触发一次验证：
@@ -158,6 +170,9 @@ curl -s -X POST "${SERVICE_URL}/internal/jobs/deliver-messages" \
 | `DATABASE_URL` | **secret** | Supavisor pooler 连接串（含密码） |
 | `OPENROUTER_API_KEY` | **secret** | LLM key |
 | `INTERNAL_JOB_TOKEN` | **secret** | 内部任务鉴权，Scheduler header 用同值 |
+| `AI_UNANSWERED_GRACE_HOURS` | env-var（可选，默认 24） | 公开信等多久无人回才派 AI |
+| `AI_REPLY_MIN_DELAY_MINUTES` / `AI_REPLY_MAX_DELAY_MINUTES` | env-var（可选，默认 5 / 60） | AI 回信的人性化延迟区间 |
+| `AI_ASSIGN_BATCH_LIMIT` | env-var（可选，默认 50） | 每次 producer 运行最多派单数 |
 
 `config.py::Settings.validate_production()` 会在生产启动时校验 `DATABASE_URL` / `SUPABASE_URL` / `INTERNAL_JOB_TOKEN` 均已设置。
 

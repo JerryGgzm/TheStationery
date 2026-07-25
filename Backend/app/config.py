@@ -52,6 +52,17 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.8
     LLM_MAX_TOKENS: int = 800
 
+    # ── AI pen-pal assignment (「公开信无人回 → 派 AI」producer) ──
+    # How long a published public letter waits for a human reply before an AI
+    # pen-pal steps in. Lower this for testing (e.g. 0 or a few minutes' worth).
+    AI_UNANSWERED_GRACE_HOURS: int = 24
+    # Human-like delay window (minutes) before the assigned AI actually replies.
+    # The producer schedules the job at now + random(min, max).
+    AI_REPLY_MIN_DELAY_MINUTES: int = 5
+    AI_REPLY_MAX_DELAY_MINUTES: int = 60
+    # Max letters assigned per producer run (caps LLM cost / rate).
+    AI_ASSIGN_BATCH_LIMIT: int = 50
+
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() == "production"

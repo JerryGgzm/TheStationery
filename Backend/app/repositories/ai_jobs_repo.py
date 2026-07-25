@@ -45,10 +45,12 @@ async def claim_due(conn: asyncpg.Connection, limit: int = 20) -> list[asyncpg.R
 
     `for update skip locked` lets multiple workers run without double-processing.
     """
+    # `due` aliases its id to `due_id` so the RETURNING column list (`_COLUMNS`,
+    # which starts with a bare `id`) isn't ambiguous across `j` and the CTE.
     return await conn.fetch(
         f"""
         with due as (
-            select id from public.ai_response_jobs
+            select id as due_id from public.ai_response_jobs
             where status = 'scheduled' and scheduled_for <= now()
             order by scheduled_for asc
             limit $1
@@ -57,7 +59,7 @@ async def claim_due(conn: asyncpg.Connection, limit: int = 20) -> list[asyncpg.R
         update public.ai_response_jobs j
         set status = 'processing', started_at = now()
         from due
-        where j.id = due.id
+        where j.id = due.due_id
         returning {_COLUMNS}
         """,
         limit,

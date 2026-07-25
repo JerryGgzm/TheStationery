@@ -29,3 +29,11 @@ async def process_ai_replies(
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
     return await jobs_service.process_ai_replies(pool)
+
+
+@router.post("/assign-ai-penpals")
+async def assign_ai_penpals(
+    _: None = Depends(require_internal_token),
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    return await jobs_service.assign_ai_penpals(pool)

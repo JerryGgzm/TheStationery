@@ -51,9 +51,9 @@ async def insert_ai_message(
         insert into public.messages
             (conversation_id, sender_type, sender_ai_character_id, body,
              reply_to_message_id, delivery_status, scheduled_for, delivered_at)
-        values ($1, 'ai_character', $2, $3, $4, $5,
-                case when $5 = 'scheduled' then now() else null end,
-                case when $5 = 'delivered' then now() else null end)
+        values ($1, 'ai_character', $2, $3, $4, $5::public.message_delivery_status,
+                case when $5::public.message_delivery_status = 'scheduled' then now() else null end,
+                case when $5::public.message_delivery_status = 'delivered' then now() else null end)
         returning {_COLUMNS}
         """,
         conversation_id,

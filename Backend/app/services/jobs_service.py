@@ -21,3 +21,8 @@ async def deliver_messages(pool: asyncpg.Pool) -> dict:
 
 async def process_ai_replies(pool: asyncpg.Pool) -> dict:
     return await ai_jobs_service.process_ai_replies(pool)
+
+
+async def assign_ai_penpals(pool: asyncpg.Pool) -> dict:
+    """Assign AI pen-pals to public letters nobody answered in time."""
+    return await ai_jobs_service.assign_unanswered_letters(pool)

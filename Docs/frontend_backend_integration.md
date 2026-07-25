@@ -296,8 +296,11 @@ login(email, password):
 ## 10. 后台任务（Cloud Scheduler → 受保护内部端点）
 
 - `POST /internal/jobs/deliver-messages`：把到点的 `messages`（`delivery_status='scheduled'` 且 `scheduled_for<=now`）置为 `delivered`。
-- `POST /internal/jobs/process-ai-replies`：扫描 `ai_response_jobs`（`status='scheduled'`），调用 LLM 生成 AI 回复，写入 `messages`。
+- `POST /internal/jobs/process-ai-replies`：扫描 `ai_response_jobs`（`status='scheduled'` 且到期），调用 LLM 生成 AI 回复（生成后再跑一次安全审核），懒建 AI 会话并写入 `messages`。
+- `POST /internal/jobs/assign-ai-penpals`：**「公开信无人回 → 派 AI」生产者**。扫描发布超过 `AI_UNANSWERED_GRACE_HOURS`（默认 24h）仍无任何会话的公开信（且信件+作者都 `allow_ai_replies=true`），随机选一个 active AI 角色入队 `ai_response_jobs(trigger_reason='unanswered_public_letter')`，`scheduled_for` 加人性化随机延迟；幂等，已有会话/已派单的信不会重复派。
 - 保护：仅接受来自 Scheduler 的带密钥/OIDC 的调用，不暴露公网匿名访问。
+
+> **AI 笔友 seed**：以上 AI 相关 job 需先有 active 角色 + active prompt。跑 `PYTHONPATH=. python scripts/seed_ai_characters.py` 播种「夜常客 / 旅人」两个角色（形象复用 `Frontend/public/assets/pixel/characters/{night_regular,traveler}`）。选角规则 MVP 为随机，后续可用 `ai_characters.topic_preferences` 做偏好选角。
 
 ---
 

@@ -101,6 +101,48 @@ async def update_draft(
     )
 
 
+async def list_unanswered_public(
+    conn: asyncpg.Connection, *, grace_hours: int, limit: int
+) -> list[asyncpg.Record]:
+    """Published public letters that nobody has replied to yet — candidates for
+    an AI pen-pal (the「公开信无人回 → 派 AI」producer).
+
+    A letter qualifies when:
+      - it's a published, non-deleted public letter,
+      - both the letter and its author allow AI replies,
+      - it was published more than `grace_hours` ago (humans got first shot),
+      - no conversation exists on it yet (truly unanswered), and
+      - no AI job is already queued/running/done for it (no double-assign).
+    Oldest-published first so the longest-waiting letters get answered first.
+    """
+    return await conn.fetch(
+        """
+        select pl.id, pl.author_user_id, pl.body
+        from public.public_letters pl
+        join public.profiles au on au.user_id = pl.author_user_id
+        where pl.audience = 'public'
+          and pl.status = 'published'
+          and pl.deleted_at is null
+          and pl.allow_ai_replies = true
+          and au.allow_ai_replies = true
+          and pl.published_at <= now() - make_interval(hours => $1)
+          and not exists (
+              select 1 from public.conversations c
+              where c.root_letter_id = pl.id
+          )
+          and not exists (
+              select 1 from public.ai_response_jobs j
+              where j.root_letter_id = pl.id
+                and j.status in ('scheduled', 'processing', 'completed')
+          )
+        order by pl.published_at asc
+        limit $2
+        """,
+        grace_hours,
+        limit,
+    )
+
+
 async def close_letter(conn: asyncpg.Connection, letter_id: str) -> asyncpg.Record:
     return await conn.fetchrow(
         f"""

@@ -22,6 +22,27 @@ async def get_by_id(conn: asyncpg.Connection, character_id: str) -> asyncpg.Reco
     )
 
 
+async def pick_random_active_with_prompt(
+    conn: asyncpg.Connection,
+) -> asyncpg.Record | None:
+    """Pick one active character that has an active prompt version — the casting
+    rule for auto-assigning an AI pen-pal to an unanswered letter (random for MVP;
+    topic_preferences-aware selection can replace this later).
+    Returns a row with `ai_character_id` + `prompt_version_id`, or None if no
+    character is ready (unseeded)."""
+    return await conn.fetchrow(
+        """
+        select ac.id as ai_character_id, pv.id as prompt_version_id
+        from public.ai_characters ac
+        join public.ai_prompt_versions pv
+          on pv.ai_character_id = ac.id and pv.status = 'active'
+        where ac.active = true
+        order by random()
+        limit 1
+        """
+    )
+
+
 async def get_active_prompt(
     conn: asyncpg.Connection, character_id: str
 ) -> asyncpg.Record | None:
