@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 
 /**
  * Quiet landing before the bookshop door. Bilingual verse:
- * Chinese — 李清照；English — Emily Dickinson (non-Chinese poet).
+ * Chinese — 李清照；English — John Donne (non-Chinese poet).
  * Layout: copy on the left, pixel art on the right.
  */
 export default function Home() {
@@ -31,9 +31,9 @@ export default function Home() {
 
           <div style={ruleStyle} aria-hidden />
 
-          <p style={enTitleStyle}>This is my letter to the World</p>
-          <p style={enLineStyle}>That never wrote to Me —</p>
-          <p style={attributionStyle}>— Emily Dickinson</p>
+          <p style={enTitleStyle}>more than kisses, letters mingle souls;</p>
+          <p style={enLineStyle}>For, thus friends absent speak.</p>
+          <p style={attributionStyle}>— John Donne</p>
         </section>
 
         <p style={bodyStyle}>
