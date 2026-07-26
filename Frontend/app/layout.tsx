@@ -4,7 +4,7 @@ import ClickSound from "@/components/ClickSound";
 
 export const metadata: Metadata = {
   title: "The Stationery — Pixel Bookshop",
-  description: "Asset & scene preview harness for the pixel bookshop letter community.",
+  description: "A cozy pixel bookshop where you write and receive letters.",
 };
 
 export default function RootLayout({

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncpg
 
+from app.constants import MAX_BODY
 from app.repositories import letters_repo, profiles_repo
 from app.services import ai_service, handles
 from app.services.exceptions import (
@@ -12,8 +13,6 @@ from app.services.exceptions import (
     SafetyRejectedError,
     ValidationError,
 )
-
-MAX_BODY = 10000
 
 
 async def create_draft(

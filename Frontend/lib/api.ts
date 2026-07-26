@@ -82,12 +82,6 @@ export function patchProfile(patch: {
   });
 }
 
-export function checkUsername(username: string) {
-  return apiFetch<{ available: boolean; reason?: string }>(
-    `/me/username-available?u=${encodeURIComponent(username)}`,
-  );
-}
-
 /** Signup-time availability check — public endpoint (no session required). */
 export function checkUsernamePublic(username: string) {
   return apiFetch<{ available: boolean; reason?: string }>(
@@ -277,7 +271,12 @@ export interface ConversationMessage {
 
 export interface ConversationThread {
   conversation_id: string;
-  root_letter: { id: string; title: string | null; body: string } | null;
+  root_letter: {
+    id: string;
+    title: string | null;
+    body: string;
+    sender: "user" | "correspondent";
+  } | null;
   messages: ConversationMessage[];
 }
 

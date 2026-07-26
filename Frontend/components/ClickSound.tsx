@@ -10,8 +10,8 @@ import { SCENE_HEIGHT, SCENE_WIDTH } from "@/lib/scene-layout";
 const CLICK_SRC = "/assets/audio/sound_effect/点击声.MP3";
 const CLICK_VOLUME = 0.5;
 
-// The cat has its own meow SFX (see PreviewScene), so clicking it should not
-// also fire the global click sound. PreviewScene publishes the cat's bounds in
+// The cat has its own meow SFX (see BookshopCatScene), so clicking it should
+// not also fire the global click sound. BookshopCatScene publishes its bounds in
 // scene coordinates; map the pointer into scene space via the Phaser canvas.
 function isCatClick(e: PointerEvent): boolean {
   const b = typeof window !== "undefined" ? window.__catBounds : undefined;

@@ -1,4 +1,4 @@
-"""AI-backed helpers: letter summaries and (placeholder) safety moderation.
+"""AI-backed helpers: letter summaries and safety moderation.
 
 All LLM access goes through OpenRouter. When OpenRouter isn't configured (e.g.
 local dev without a key) these degrade gracefully so the core flow still works.

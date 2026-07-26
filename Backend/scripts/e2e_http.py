@@ -4,13 +4,13 @@ Unlike e2e_smoke.py (which calls the service layer directly), this exercises the
 full request path a browser uses: obtain a Supabase access token, then hit the
 API with a Bearer token. It:
 
-  1. signs up two users via Supabase GoTrue (creates hashed passwords),
-  2. confirms their emails directly in the DB (project has email confirm on),
-  3. gets access tokens via the password grant,
-  4. bootstraps profiles (PATCH /me/profile),
-  5. Alice publishes a public letter (POST /letters -> /publish),
-  6. Bob reads the board, opens the letter, and replies,
-  7. verifies Alice's mailbox/thread, then cleans everything up.
+  1. creates two confirmed auth users directly in auth.users/auth.identities
+     (bcrypt-hashed password; skips GoTrue signup to avoid its email rate limit),
+  2. gets access tokens via the password grant,
+  3. bootstraps profiles (PATCH /me/profile),
+  4. Alice publishes a public letter (POST /letters -> /publish),
+  5. Bob reads the board, opens the letter, and replies,
+  6. verifies Alice's mailbox/thread, then cleans everything up.
 
 Run (backend must be running on :8080):
     PYTHONPATH=. python scripts/e2e_http.py

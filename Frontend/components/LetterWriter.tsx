@@ -6,22 +6,18 @@ import DraftBox from "@/components/DraftBox";
 import PixelBlurBg from "@/components/PixelBlurBg";
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
 import { ApiError, postLetter, saveDraft, type MyLetter } from "@/lib/api";
+import { USERNAME_RE, normalizeHandle } from "@/lib/auth";
+import { MAX_BODY } from "@/lib/limits";
 
 // The letter-writing surface shown after the desk unfold animation.
 // The desk stays as a dimmed, pixelated-blurred backdrop; the sheet of paper is
 // enlarged as the sole focus and *is* the input area (no extra modal/toolbar).
 // Palette stays no-radius, low-saturation walnut + warm paper.
-const MAX_CHARS = 1000;
 const SUBJECT_MAX = 80;
 const TYPE_SFX = "/assets/audio/sound_effect/打字声.MP3";
 
-// Unique handle rules (kept in sync with the profiles.username design):
-// 3–20 chars, must start with a letter, then letters / digits / underscore.
-// Case-insensitive; normalised to lowercase before comparison / delivery.
+// Longest @handle accepted in the "to" field (matches USERNAME_RE in lib/auth).
 const USERNAME_MAX = 20;
-const USERNAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{2,19}$/;
-const normalizeHandle = (v: string) =>
-  v.trim().replace(/^@+/, "").toLowerCase();
 
 export interface LetterDraft {
   text: string;
@@ -232,7 +228,7 @@ export default function LetterWriter({
         <textarea
           ref={taRef}
           value={text}
-          maxLength={MAX_CHARS}
+          maxLength={MAX_BODY}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Begin writing…"
@@ -248,7 +244,7 @@ export default function LetterWriter({
                 ? "Handle: 3–20 letters, digits or _"
                 : savingDraft
                   ? "Tucking into the drawer…"
-                  : `${text.length} / ${MAX_CHARS}`}
+                  : `${text.length} / ${MAX_BODY}`}
           </span>
           <div style={actionsStyle}>
             <button

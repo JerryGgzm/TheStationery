@@ -32,9 +32,7 @@ def _client() -> PyJWKClient:
 
 @dataclass
 class CurrentUser:
-    user_id: str          # auth.users.id (JWT `sub`)
-    email: str | None
-    token: str
+    user_id: str  # auth.users.id (JWT `sub`)
 
 
 def verify_access_token(token: str) -> CurrentUser:
@@ -59,7 +57,7 @@ def verify_access_token(token: str) -> CurrentUser:
     sub = payload.get("sub")
     if not sub:
         raise AuthError("Token missing subject", code="invalid_token")
-    return CurrentUser(user_id=sub, email=payload.get("email"), token=token)
+    return CurrentUser(user_id=sub)
 
 
 def verify_internal_token(provided: str | None) -> None:

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import BookstorePreview, { type TimeOfDay } from "@/components/BookstorePreview";
+import BookshopScene, { type TimeOfDay } from "@/components/BookshopScene";
 import LoginWindow from "@/components/LoginWindow";
 import { getSupabase } from "@/lib/supabase";
 
@@ -137,7 +137,7 @@ export default function BookshopApp() {
 
   return (
     <div style={rootStyle}>
-      {phase === "inside" && <BookstorePreview initialTimeOfDay={timeOfDay} />}
+      {phase === "inside" && <BookshopScene initialTimeOfDay={timeOfDay} />}
 
       {showVideo && (
         <video

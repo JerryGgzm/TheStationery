@@ -12,11 +12,10 @@ from app.repositories import (
     letters_repo,
     messages_repo,
 )
+from app.constants import MAX_BODY
 from app.services import ai_jobs_service, derive
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
 from app.services.media import avatar_url
-
-MAX_BODY = 10000
 
 
 def _correspondent(row: asyncpg.Record) -> dict:
@@ -77,12 +76,15 @@ async def get_conversation(
             "is_reply": not mine,
         }
 
+    root_mine = str(conversation["letter_author_user_id"]) == user_id
+
     return {
         "conversation_id": str(conversation["id"]),
         "root_letter": {
             "id": str(root["id"]),
             "title": root["subject"],
             "body": root["body"],
+            "sender": "user" if root_mine else "correspondent",
         }
         if root
         else None,

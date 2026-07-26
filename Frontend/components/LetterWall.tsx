@@ -128,7 +128,12 @@ export default function LetterWall({
               {deliveries.map((d) => (
                 <LetterCard
                   key={d.delivery_id}
-                  item={{ summary: d.summary, seal: d.seal, isReply: d.is_reply }}
+                  item={{
+                    summary: d.summary,
+                    seal: d.seal,
+                    isReply: d.is_reply,
+                    badge: d.is_reply ? "Reply" : undefined,
+                  }}
                   onOpen={() => open(d.delivery_id)}
                 />
               ))}
@@ -142,6 +147,11 @@ export default function LetterWall({
           title={letter?.title ?? null}
           body={letter?.body ?? ""}
           loading={letterLoading}
+          badge={
+            deliveries?.find((d) => d.delivery_id === view.deliveryId)?.is_reply
+              ? "A reply to your letter"
+              : undefined
+          }
           backLabel="Back to letters"
           onBack={() => setView({ kind: "list" })}
           onReply={() => {

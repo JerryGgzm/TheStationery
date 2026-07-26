@@ -27,18 +27,3 @@ async def remove(
         blocker_user_id,
         blocked_user_id,
     )
-
-
-async def is_blocked_either_way(
-    conn: asyncpg.Connection, a: str, b: str
-) -> bool:
-    row = await conn.fetchrow(
-        """
-        select 1 from public.user_blocks
-        where (blocker_user_id = $1 and blocked_user_id = $2)
-           or (blocker_user_id = $2 and blocked_user_id = $1)
-        """,
-        a,
-        b,
-    )
-    return row is not None

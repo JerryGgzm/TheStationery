@@ -5,13 +5,9 @@ Thin async wrapper over httpx. A single AsyncClient is reused across requests.
 
 from __future__ import annotations
 
-import logging
-
 import httpx
 
 from app.config import get_settings
-
-logger = logging.getLogger("stationery.openrouter")
 
 _client: httpx.AsyncClient | None = None
 

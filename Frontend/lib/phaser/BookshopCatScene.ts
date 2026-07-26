@@ -34,14 +34,14 @@ interface SceneInitData {
 }
 
 // The bookstore background is a looping HTML <video> rendered behind this
-// scene's transparent canvas (see BookstorePreview). This scene draws the cat
+// scene's transparent canvas (see BookshopScene). This scene draws the cat
 // on top of that video.
 //
 // Cat behaviour: the cat starts asleep at a random station (floor or desk).
 // Clicking it wakes it up; it then wanders between stations (radiator, mailbox,
 // window, desk) for a while, resting with a per-station dwell animation, and
 // finally curls up to sleep again at a new spot until clicked once more.
-export class PreviewScene extends Phaser.Scene {
+export class BookshopCatScene extends Phaser.Scene {
   private manifest!: PixelManifest;
 
   private cat?: Phaser.GameObjects.Sprite;
@@ -50,14 +50,13 @@ export class PreviewScene extends Phaser.Scene {
   private mode: "sleeping" | "active" = "sleeping";
   private activeUntil = 0;
   private busy = false;
-  private debugMode = false;
   private anims2: Record<string, string | undefined> = {};
   private lastMeow = -1;
   private meowReadyAt = 0;
   private currentMeow?: Phaser.Sound.BaseSound;
 
   constructor() {
-    super("preview");
+    super("bookshop");
   }
 
   init(data: SceneInitData) {
@@ -250,7 +249,7 @@ export class PreviewScene extends Phaser.Scene {
   }
 
   private wake() {
-    if (this.mode !== "sleeping" || this.debugMode || !this.cat || !this.hasWalk()) return;
+    if (this.mode !== "sleeping" || !this.cat || !this.hasWalk()) return;
     this.hideZzz();
     this.mode = "active";
     this.activeUntil = this.time.now + Phaser.Math.Between(16000, 26000);
@@ -269,7 +268,7 @@ export class PreviewScene extends Phaser.Scene {
   // ---- Wandering -----------------------------------------------------------
 
   private goNext() {
-    if (this.mode !== "active" || this.debugMode || !this.cat || this.busy) return;
+    if (this.mode !== "active" || !this.cat || this.busy) return;
 
     // Time to settle down: walk to a fresh spot and fall asleep there.
     if (this.time.now >= this.activeUntil) {
@@ -312,7 +311,6 @@ export class PreviewScene extends Phaser.Scene {
       }
     }
 
-    if (this.debugMode) return;
     this.time.delayedCall(Phaser.Math.Between(2500, 5000), () => this.goNext());
   }
 
@@ -396,28 +394,6 @@ export class PreviewScene extends Phaser.Scene {
       ease: goingUp ? "Sine.easeOut" : "Sine.easeIn",
       onComplete: done,
     });
-  }
-
-  // ---- Debug / calibration -------------------------------------------------
-
-  debugPlace(i: number) {
-    this.debugMode = true;
-    this.tweens.killAll();
-    this.time.removeAllEvents();
-    this.hideZzz();
-    const cat = this.cat;
-    if (!cat || !CAT_STATIONS[i]) return;
-    const s = CAT_STATIONS[i];
-    cat.setPosition(s.x, s.y);
-    cat.setFlipX(false);
-    const dwell = this.anims2[s.dwell] ?? this.idleKey();
-    if (dwell) cat.play(dwell, true);
-  }
-
-  debugResume() {
-    this.debugMode = false;
-    this.busy = false;
-    this.goSleep(this.stationIndex);
   }
 
   private placeActor(actor: ActorPlacement) {

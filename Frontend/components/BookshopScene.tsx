@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENE_WIDTH, SCENE_HEIGHT, type PixelManifest } from "@/lib/scene-layout";
+import { getBoard } from "@/lib/api";
 import LetterWriter from "@/components/LetterWriter";
 import LetterWall from "@/components/LetterWall";
 import Correspondence from "@/components/Correspondence";
@@ -112,7 +113,7 @@ const LABEL_DELAY_MS = 800;
 // How long the one-time first-entry guide flash stays visible before hiding.
 const INTRO_HINT_MS = 2600;
 
-export default function BookstorePreview({
+export default function BookshopScene({
   initialTimeOfDay = "night",
 }: {
   initialTimeOfDay?: TimeOfDay;
@@ -133,6 +134,8 @@ export default function BookstorePreview({
   const [wallOpen, setWallOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [veil, setVeil] = useState(0); // black transition veil for the wall view
+  // Unread-reply flag driving the pixel red dot pinned to the letter wall.
+  const [hasUnreadReply, setHasUnreadReply] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const deskVideoRef = useRef<HTMLVideoElement>(null);
   const sentVideoRef = useRef<HTMLVideoElement>(null);
@@ -147,9 +150,9 @@ export default function BookstorePreview({
     let cancelled = false;
 
     async function boot() {
-      const [Phaser, { PreviewScene }] = await Promise.all([
+      const [Phaser, { BookshopCatScene }] = await Promise.all([
         import("phaser"),
-        import("@/lib/phaser/PreviewScene"),
+        import("@/lib/phaser/BookshopCatScene"),
       ]);
 
       let manifest: PixelManifest = { version: 1, assets: {} };
@@ -175,14 +178,10 @@ export default function BookstorePreview({
         },
         callbacks: {
           preBoot: (g) => {
-            g.scene.add("preview", PreviewScene, true, { manifest });
+            g.scene.add("bookshop", BookshopCatScene, true, { manifest });
           },
         },
       });
-
-      if (process.env.NODE_ENV !== "production") {
-        (window as unknown as { __previewGame?: unknown }).__previewGame = game;
-      }
     }
 
     boot();
@@ -258,6 +257,23 @@ export default function BookstorePreview({
     const timers = wallTimers.current;
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, []);
+
+  // Show the red dot when the wall holds an unread reply to the user. Re-checked
+  // whenever the wall is closed (opening it marks replies read server-side).
+  useEffect(() => {
+    if (wallOpen) return;
+    let alive = true;
+    getBoard()
+      .then(
+        (res) =>
+          alive &&
+          setHasUnreadReply(res.deliveries.some((d) => d.is_reply && !d.opened)),
+      )
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [wallOpen]);
 
   // Clicking the desk opens the letter-writing screen; clicking the letter wall
   // opens the wall of letters. Ignore clicks that land on the cat (it meows) so
@@ -458,6 +474,23 @@ export default function BookstorePreview({
           }}
         />
 
+        {/* Pixel red dot pinned to the letter wall when a reply is waiting. */}
+        {hasUnreadReply && (
+          <div
+            aria-label="You have a new reply"
+            style={{
+              position: "absolute",
+              left: `${(124 / SCENE_WIDTH) * 100}%`,
+              top: `${(84 / SCENE_HEIGHT) * 100}%`,
+              transform: "translate(-50%, -50%)",
+              zIndex: 4,
+              pointerEvents: "none",
+              ...replyDotStyle,
+            }}
+          />
+        )}
+        <style>{`@keyframes replyDotPulse { 0%,100% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.82); } }`}</style>
+
         {SCENE_LABELS.map((l) => {
           const isHover = hovered === l.id;
           const visible = isHover || introHint;
@@ -593,6 +626,18 @@ export default function BookstorePreview({
     </div>
   );
 }
+
+// Pixel-art notification dot: a small hard-edged red square with a dark border
+// and offset shadow, gently pulsing so a new reply catches the eye.
+const replyDotStyle: React.CSSProperties = {
+  width: 13,
+  height: 13,
+  background: "#d63b28",
+  border: "2px solid #7c2318",
+  borderRadius: 0,
+  boxShadow: "2px 2px 0 0 rgba(0,0,0,0.5), 0 0 8px rgba(214,59,40,0.7)",
+  animation: "replyDotPulse 1.6s ease-in-out infinite",
+};
 
 // A slip of cream paper pinned to the letter wall — hard offset shadow, no radius.
 const noteStyle: React.CSSProperties = {

@@ -98,8 +98,14 @@ async def list_for_user(
           ac.display_name   as ai_display_name,
           ac.slug           as ai_slug,
           ac.visual_asset_key as ai_visual_asset_key,
-          (select count(*) from public.messages m
-             where m.conversation_id = c.id and m.deleted_at is null) as message_count
+          -- Only letters FROM the other party are shelved: the counterpart's
+          -- messages, plus the root letter when they were the one who wrote it.
+          (
+            (select count(*) from public.messages m
+               where m.conversation_id = c.id and m.deleted_at is null
+                 and not (m.sender_type = 'user' and m.sender_user_id = $1))
+            + case when c.letter_author_user_id = $1 then 0 else 1 end
+          ) as message_count
         from public.conversations c
         left join public.profiles p
           on p.user_id = (case when c.letter_author_user_id = $1

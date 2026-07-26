@@ -16,12 +16,6 @@ async def list_active(conn: asyncpg.Connection) -> list[asyncpg.Record]:
     )
 
 
-async def get_by_id(conn: asyncpg.Connection, character_id: str) -> asyncpg.Record | None:
-    return await conn.fetchrow(
-        f"select {_COLUMNS} from public.ai_characters where id = $1", character_id
-    )
-
-
 async def pick_random_active_with_prompt(
     conn: asyncpg.Connection,
 ) -> asyncpg.Record | None:

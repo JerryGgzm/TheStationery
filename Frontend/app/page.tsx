@@ -11,7 +11,7 @@ export default function Home() {
         欢迎来到 The Stationery。愿你在这里写下、也收到，一封值得等待的信。
       </p>
       <p style={{ marginTop: 24 }}>
-        <Link href="/preview" style={{ color: "var(--lamp)" }}>
+        <Link href="/bookshop" style={{ color: "var(--lamp)" }}>
           → 推门进入书店
         </Link>
       </p>

@@ -11,22 +11,14 @@ import {
   PAPER_TOP,
   Seal,
   WALNUT,
-  type LetterSeal,
 } from "@/components/letterkit";
 import { deleteLetter, listMyLetters, type MyLetter } from "@/lib/api";
+import { sealFor } from "@/lib/derive";
 
 // The "Draft box" picker: a walnut drawer of saved drafts. Opened from the
 // Drafts icon on the writing desk. Each slip shows a title + "Edited X ago" and
 // a Continue action that loads the draft back into the writer. Drafts can also
 // be discarded (DELETE /letters/{id}).
-
-const SEALS: LetterSeal[] = ["wax", "clip", "pin", "tape", "ribbon"];
-
-function sealFor(id: string): LetterSeal {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return SEALS[h % SEALS.length];
-}
 
 // A draft with no explicit title falls back to its opening line.
 function draftTitle(d: MyLetter): string {

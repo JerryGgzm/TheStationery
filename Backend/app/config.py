@@ -22,7 +22,6 @@ class Settings(BaseSettings):
 
     # ── Runtime ──
     ENV: str = "development"
-    PORT: int = 8080
     API_PREFIX: str = "/api/v1"
     # Dev default accepts the Next.js dev server on either host alias so the app
     # works whether opened via localhost or 127.0.0.1. Override in production.

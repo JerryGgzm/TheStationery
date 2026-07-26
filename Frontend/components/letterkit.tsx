@@ -7,6 +7,7 @@
 import { useCallback, useState } from "react";
 
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
+import { MAX_BODY } from "@/lib/limits";
 
 // Decorative style unions — mirrored on the backend (services/derive.py) so a
 // letter/bundle always renders the same seal/tie.
@@ -23,9 +24,10 @@ export interface CardItem {
   summary: string | null;
   seal: LetterSeal;
   isReply?: boolean;
+  // Optional corner ribbon (e.g. "Reply") to specially mark this note.
+  badge?: string;
 }
 
-const MAX_REPLY = 1000;
 const TYPE_SFX = "/assets/audio/sound_effect/打字声.MP3";
 
 // Warm paper / ink / walnut palette, shared with the login + writing screens.
@@ -201,6 +203,7 @@ export function LetterCard({
 
       <Seal kind={item.seal} />
       {item.isReply && <Postmark />}
+      {item.badge && <span style={ribbonStyle}>{item.badge}</span>}
 
       <p style={cardSummaryStyle}>
         <span style={{ color: RULE, marginRight: "1cqw" }}>{"\u2726"}</span>
@@ -217,6 +220,7 @@ export function LetterDetail({
   title,
   body,
   loading,
+  badge,
   backLabel,
   onBack,
   onReply,
@@ -225,6 +229,7 @@ export function LetterDetail({
   title: string | null;
   body: string;
   loading?: boolean;
+  badge?: string;
   backLabel: string;
   onBack: () => void;
   onReply: () => void;
@@ -235,6 +240,7 @@ export function LetterDetail({
       <BackLink label={backLabel} onClick={onBack} />
       <CloseButton onClose={onClose} />
       <article style={{ ...sheetStyle, maxHeight: "90%" }}>
+        {badge && <div style={detailBadgeStyle}>{badge}</div>}
         <h3 style={letterTitleStyle}>{title || "A letter"}</h3>
         <Divider />
         <div style={letterBodyStyle}>{loading ? "Unfolding…" : body}</div>
@@ -309,7 +315,7 @@ export function LetterReply({
           <Divider />
           <textarea
             value={text}
-            maxLength={MAX_REPLY}
+            maxLength={MAX_BODY}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Write your reply…"
@@ -324,7 +330,7 @@ export function LetterReply({
           )}
           <div style={replyFooterStyle}>
             <span style={countStyle}>
-              {text.length} / {MAX_REPLY}
+              {text.length} / {MAX_BODY}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: "4cqw" }}>
               <button
@@ -455,6 +461,40 @@ const postmarkStyle: React.CSSProperties = {
   height: "7cqw",
   transform: "rotate(-14deg)",
   pointerEvents: "none",
+};
+
+// Small pixel ribbon in the card's top-right corner marking a reply to you.
+const ribbonStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "1.4cqw",
+  right: "1.4cqw",
+  padding: "0.5cqw 1.4cqw",
+  background: "#b23a2b",
+  color: "#f6e7cf",
+  border: "1px solid #7c2318",
+  boxShadow: "1px 1px 0 0 rgba(0,0,0,0.35)",
+  fontFamily: '"Courier New", ui-monospace, monospace',
+  fontSize: "1.4cqw",
+  fontWeight: 700,
+  letterSpacing: "0.2cqw",
+  textTransform: "uppercase",
+  lineHeight: 1.2,
+};
+
+// Banner above the detail title marking that this letter is a reply to you.
+const detailBadgeStyle: React.CSSProperties = {
+  alignSelf: "center",
+  margin: "0 0 3cqw",
+  padding: "1cqw 3cqw",
+  background: "#b23a2b",
+  color: "#f6e7cf",
+  border: "1px solid #7c2318",
+  boxShadow: "1px 2px 0 0 rgba(0,0,0,0.3)",
+  fontFamily: '"Courier New", ui-monospace, monospace',
+  fontSize: "3cqw",
+  fontWeight: 700,
+  letterSpacing: "0.3cqw",
+  lineHeight: 1.2,
 };
 
 const cardSummaryStyle: React.CSSProperties = {

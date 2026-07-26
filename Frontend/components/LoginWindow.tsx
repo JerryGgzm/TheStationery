@@ -1,13 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  login,
-  normalizeHandle,
-  register,
-  resendConfirmation,
-  USERNAME_RE,
-} from "@/lib/auth";
+import { login, normalizeHandle, register, USERNAME_RE } from "@/lib/auth";
 import { checkUsernamePublic } from "@/lib/api";
 
 type Mode = "login" | "register";
@@ -25,13 +19,8 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
-  // Set after a signup that needs email confirmation, so we can offer a
-  // "resend confirmation email" action on the following login screen.
-  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
-  const [resending, setResending] = useState(false);
 
   const handle = normalizeHandle(username);
 
@@ -80,7 +69,6 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
     e.preventDefault();
     if (!canSubmit) return;
     setError(null);
-    setNotice(null);
 
     if (mode === "register") {
       if (password !== confirm) {
@@ -97,22 +85,10 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
     try {
       if (mode === "login") {
         await login(email.trim(), password);
-        onEnter();
       } else {
-        const { needsConfirmation } = await register(
-          email.trim(),
-          password,
-          username,
-        );
-        if (needsConfirmation) {
-          setNotice("Check your email to confirm your account, then sign in.");
-          setPendingConfirmEmail(email.trim());
-          setMode("login");
-          setConfirm("");
-        } else {
-          onEnter();
-        }
+        await register(email.trim(), password, username);
       }
+      onEnter();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -120,24 +96,9 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
     }
   };
 
-  const handleResend = async () => {
-    if (!pendingConfirmEmail || resending) return;
-    setResending(true);
-    setError(null);
-    try {
-      await resendConfirmation(pendingConfirmEmail);
-      setNotice(`Confirmation email re-sent to ${pendingConfirmEmail}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't resend the email.");
-    } finally {
-      setResending(false);
-    }
-  };
-
   const switchMode = (m: Mode) => {
     setMode(m);
     setError(null);
-    setNotice(null);
   };
 
   return (
@@ -223,29 +184,7 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
             </label>
           )}
 
-          {mode === "login" && (
-            <div style={forgotRowStyle}>
-              <button type="button" style={linkStyle} onClick={() => {}}>
-                Forgot password?
-              </button>
-            </div>
-          )}
-
           {error && <p style={errorStyle}>{error}</p>}
-          {notice && <p style={noticeStyle}>{notice}</p>}
-          {mode === "login" && pendingConfirmEmail && (
-            <p style={resendRowStyle}>
-              Didn&apos;t get it?{" "}
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resending}
-                style={linkStyle}
-              >
-                {resending ? "Sending…" : "Resend confirmation email"}
-              </button>
-            </p>
-          )}
 
           <button type="submit" disabled={!canSubmit} style={submitStyle(canSubmit)}>
             {loading
@@ -277,6 +216,13 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
                 </button>
               </>
             )}
+          </p>
+
+          <p style={supportStyle}>
+            Need help?{" "}
+            <a href="mailto:support@xinstationary.com" style={linkStyle}>
+              support@xinstationary.com
+            </a>
           </p>
         </div>
       </form>
@@ -436,32 +382,11 @@ const hintStyle: React.CSSProperties = {
   textTransform: "none",
 };
 
-const forgotRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  marginTop: -4,
-};
-
 const errorStyle: React.CSSProperties = {
   margin: 0,
   fontSize: 12,
   color: "#e0897f",
   fontWeight: 700,
-  textAlign: "center",
-};
-
-const noticeStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: 12,
-  color: GOLD_SOFT,
-  fontWeight: 700,
-  textAlign: "center",
-};
-
-const resendRowStyle: React.CSSProperties = {
-  margin: "-4px 0 0",
-  fontSize: 11.5,
-  color: MUTED,
   textAlign: "center",
 };
 
@@ -505,6 +430,14 @@ const footerStyle: React.CSSProperties = {
   margin: 0,
   textAlign: "center",
   fontSize: 12.5,
+  color: MUTED,
+};
+
+const supportStyle: React.CSSProperties = {
+  margin: "2px 0 0",
+  textAlign: "center",
+  fontSize: 11,
+  letterSpacing: 0.2,
   color: MUTED,
 };
 

@@ -20,18 +20,6 @@ async def get_active_batch(
     )
 
 
-async def complete_active_batches(conn: asyncpg.Connection, viewer_user_id: str) -> None:
-    """Retire any currently-active batch (single-active partial unique index)."""
-    await conn.execute(
-        """
-        update public.letter_delivery_batches
-        set status = 'completed', completed_at = now()
-        where viewer_user_id = $1 and status = 'active'
-        """,
-        viewer_user_id,
-    )
-
-
 async def create_batch(
     conn: asyncpg.Connection, viewer_user_id: str, reason: str = "bookstore_visit"
 ) -> asyncpg.Record:

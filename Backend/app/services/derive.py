@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 
-# Must match Frontend/lib/letters.ts
+# Must match Frontend/lib/derive.ts
 SEALS = ("wax", "clip", "pin", "tape", "ribbon")
 TIES = ("red-string", "green-string", "clip", "twine-wax", "green-band")
 

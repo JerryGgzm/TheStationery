@@ -11,9 +11,8 @@ from app.repositories import (
     messages_repo,
     profiles_repo,
 )
+from app.constants import MAX_BODY
 from app.services.exceptions import ForbiddenError, NotFoundError, ValidationError
-
-MAX_BODY = 10000
 
 
 async def open_delivery(

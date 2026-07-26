@@ -27,6 +27,7 @@ import {
   type Bundle,
   type ConversationThread,
 } from "@/lib/api";
+import { sealFor } from "@/lib/derive";
 
 // The bookshelf behind the desk: past conversations grouped by the person you're
 // writing with. A brief sharp "pile of letters" splash fades into the sorted
@@ -37,15 +38,6 @@ import {
 //   reply   → POST /conversations/{id}/messages, then the shared send animation
 const INTRO_HOLD_MS = 480; // how long the sharp pile stays before fading
 const INTRO_FADE_MS = 420;
-
-const SEALS: LetterSeal[] = ["wax", "clip", "pin", "tape", "ribbon"];
-
-// Deterministic seal per message id so a note always looks the same.
-function sealFor(id: string): LetterSeal {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return SEALS[h % SEALS.length];
-}
 
 function excerpt(body: string): string {
   const clean = body.replace(/\s+/g, " ").trim();
@@ -60,9 +52,12 @@ interface ThreadItem {
   isReply: boolean;
 }
 
+// The shelf keeps only letters FROM the other party — the user's own outgoing
+// replies aren't shelved. That means the root letter only when they wrote it,
+// plus every message the correspondent sent.
 function threadItems(thread: ConversationThread): ThreadItem[] {
   const items: ThreadItem[] = [];
-  if (thread.root_letter) {
+  if (thread.root_letter && thread.root_letter.sender === "correspondent") {
     items.push({
       id: thread.root_letter.id,
       title: thread.root_letter.title,
@@ -72,6 +67,7 @@ function threadItems(thread: ConversationThread): ThreadItem[] {
     });
   }
   for (const m of thread.messages) {
+    if (m.sender !== "correspondent") continue;
     items.push({
       id: m.id,
       title: null,
