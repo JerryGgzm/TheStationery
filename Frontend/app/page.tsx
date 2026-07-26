@@ -4,51 +4,100 @@ import type { CSSProperties } from "react";
 /**
  * Quiet landing before the bookshop door. Bilingual verse:
  * Chinese — 李清照；English — Emily Dickinson (non-Chinese poet).
+ * Layout: copy on the left, pixel art on the right.
  */
 export default function Home() {
   return (
-    <main style={mainStyle}>
-      <p style={brandStyle}>见信 · The Stationery</p>
+    <main className="landing" style={mainStyle}>
+      <style>{`
+        @media (max-width: 820px) {
+          .landing {
+            grid-template-columns: 1fr !important;
+            grid-template-rows: auto minmax(42vh, 48vh);
+          }
+          .landing-art {
+            min-height: 42vh !important;
+            order: -1;
+          }
+        }
+      `}</style>
 
-      <section style={verseBlockStyle} aria-label="Verse">
-        <h1 style={zhTitleStyle}>云中谁寄锦书来</h1>
-        <p style={zhLineStyle}>雁字回时，月满西楼。</p>
+      <div style={copyColStyle}>
+        <p style={brandStyle}>见信 · The Stationery</p>
 
-        <div style={ruleStyle} aria-hidden />
+        <section style={verseBlockStyle} aria-label="Verse">
+          <h1 style={zhTitleStyle}>云中谁寄锦书来</h1>
+          <p style={zhLineStyle}>雁字回时，月满西楼。</p>
 
-        <p style={enTitleStyle}>This is my letter to the World</p>
-        <p style={enLineStyle}>That never wrote to Me —</p>
-        <p style={attributionStyle}>— Emily Dickinson</p>
-      </section>
+          <div style={ruleStyle} aria-hidden />
 
-      <p style={bodyStyle}>
-        欢迎来到见信。在这里写下，也静候一封值得等待的信。
-        <br />
-        <span style={enBodyStyle}>
-          Welcome to The Stationery — a quiet place to write, and to wait for a
-          letter worth the waiting.
-        </span>
-      </p>
+          <p style={enTitleStyle}>This is my letter to the World</p>
+          <p style={enLineStyle}>That never wrote to Me —</p>
+          <p style={attributionStyle}>— Emily Dickinson</p>
+        </section>
 
-      <p style={ctaWrapStyle}>
-        <Link href="/bookshop" style={ctaStyle}>
-          → 推门入店 · Enter the bookstore
-        </Link>
-      </p>
+        <p style={bodyStyle}>
+          欢迎来到见信。在这里写下，也静候一封值得等待的信。
+          <br />
+          <span style={enBodyStyle}>
+            Welcome to The Stationery — a quiet place to write, and to wait for
+            a letter worth the waiting.
+          </span>
+        </p>
+
+        <p style={ctaWrapStyle}>
+          <Link href="/bookshop" style={ctaStyle}>
+            → 推门入店 · Enter the bookstore
+          </Link>
+        </p>
+      </div>
+
+      <div className="landing-art" style={artColStyle} aria-hidden>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/assets/pixel/scene/letters-becoming-birds-pixel-hd.png"
+          alt=""
+          style={artImgStyle}
+        />
+      </div>
     </main>
   );
 }
 
 const mainStyle: CSSProperties = {
   minHeight: "100vh",
-  padding: "min(12vh, 80px) 28px 64px",
-  maxWidth: 560,
-  margin: "0 auto",
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.05fr)",
+  alignItems: "stretch",
+  background:
+    "radial-gradient(ellipse 70% 50% at 18% 20%, rgba(230,168,92,0.10) 0%, transparent 55%), var(--night-bg)",
+};
+
+const copyColStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
-  background:
-    "radial-gradient(ellipse 80% 55% at 50% 0%, rgba(230,168,92,0.12) 0%, transparent 55%), var(--night-bg)",
+  padding: "min(10vh, 72px) clamp(28px, 5vw, 64px) 56px",
+  maxWidth: 560,
+  boxSizing: "border-box",
+};
+
+const artColStyle: CSSProperties = {
+  position: "relative",
+  minHeight: "100vh",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const artImgStyle: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  objectPosition: "center",
+  imageRendering: "pixelated",
+  display: "block",
 };
 
 const brandStyle: CSSProperties = {
@@ -67,7 +116,7 @@ const zhTitleStyle: CSSProperties = {
   margin: 0,
   color: "var(--lamp)",
   fontFamily: '"Ma Shan Zheng", "Songti SC", serif',
-  fontSize: "clamp(28px, 6vw, 40px)",
+  fontSize: "clamp(28px, 4.2vw, 40px)",
   fontWeight: 400,
   letterSpacing: "0.12em",
   lineHeight: 1.35,
@@ -77,7 +126,7 @@ const zhLineStyle: CSSProperties = {
   margin: "10px 0 0",
   opacity: 0.78,
   fontFamily: '"Ma Shan Zheng", "Songti SC", serif',
-  fontSize: "clamp(18px, 3.5vw, 22px)",
+  fontSize: "clamp(18px, 2.6vw, 22px)",
   letterSpacing: "0.18em",
 };
 
@@ -92,7 +141,7 @@ const enTitleStyle: CSSProperties = {
   margin: 0,
   color: "var(--paper)",
   fontFamily: '"Caveat", Georgia, cursive',
-  fontSize: "clamp(22px, 4.5vw, 30px)",
+  fontSize: "clamp(22px, 3.2vw, 30px)",
   fontWeight: 600,
   lineHeight: 1.3,
   opacity: 0.95,
@@ -101,7 +150,7 @@ const enTitleStyle: CSSProperties = {
 const enLineStyle: CSSProperties = {
   margin: "6px 0 0",
   fontFamily: '"Caveat", Georgia, cursive',
-  fontSize: "clamp(18px, 3.8vw, 24px)",
+  fontSize: "clamp(18px, 2.8vw, 24px)",
   opacity: 0.72,
   fontStyle: "italic",
 };
