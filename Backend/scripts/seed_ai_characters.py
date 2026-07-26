@@ -42,7 +42,7 @@ your own perspective. Stay personal and grounded, never generic.
 CHARACTERS = [
     {
         "slug": "night_regular",
-        "display_name": "夜常客 / The Night Regular",
+        "display_name": "The Night Regular",
         "short_description": "A quiet late-night regular who is a patient listener.",
         "persona_summary": (
             "A regular who haunts the bookstore after midnight. Quiet, "
@@ -61,7 +61,7 @@ CHARACTERS = [
     },
     {
         "slug": "traveler",
-        "display_name": "旅人 / The Traveler",
+        "display_name": "The Traveler",
         "short_description": "A warm wanderer full of stories from far places.",
         "persona_summary": (
             "A wanderer passing through, carrying stories from far-off places. "

@@ -39,6 +39,11 @@ export const AMBER = "#caa15c";
 export const AMBER_EDGE = "#9c7b3a";
 export const CREAM = "#f0e4c6";
 
+// Handwriting stack for the actual letter text (title + body + card excerpt).
+// Caveat carries Latin; Ma Shan Zheng (a CJK brush face) carries Chinese, which
+// is what most letters are written in. Loaded in app/layout.tsx.
+export const LETTER_HAND = '"Caveat", "Ma Shan Zheng", "Segoe Print", cursive';
+
 // A sheet of letter paper — portrait, roughly US-letter proportion, with its own
 // container so inner cqw units are relative to the sheet (matching the writing
 // screen), not the full stage.
@@ -460,8 +465,11 @@ const postmarkStyle: React.CSSProperties = {
 const cardSummaryStyle: React.CSSProperties = {
   margin: "1.5cqw 0 0",
   color: INK,
+  fontFamily: LETTER_HAND,
+  // NOTE: the card is not a container, so this cqw is relative to the scene
+  // root (a large base).
   fontSize: "1.7cqw",
-  lineHeight: 1.45,
+  lineHeight: 1.4,
   flex: 1,
 };
 
@@ -496,9 +504,10 @@ const letterTitleStyle: React.CSSProperties = {
   margin: 0,
   textAlign: "center",
   color: INK,
-  fontSize: "6cqw",
-  fontWeight: 700,
-  letterSpacing: "0.5cqw",
+  fontFamily: LETTER_HAND,
+  fontSize: "5cqw",
+  fontWeight: 600,
+  letterSpacing: "0.2cqw",
 };
 
 const letterBodyStyle: React.CSSProperties = {
@@ -506,8 +515,9 @@ const letterBodyStyle: React.CSSProperties = {
   overflowY: "auto",
   whiteSpace: "pre-line",
   color: INK,
-  fontSize: "4cqw",
-  lineHeight: 1.7,
+  fontFamily: LETTER_HAND,
+  fontSize: "4.6cqw",
+  lineHeight: 1.6,
   letterSpacing: "0.1cqw",
 };
 

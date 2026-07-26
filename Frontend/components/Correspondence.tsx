@@ -489,7 +489,7 @@ const labelCardStyle: React.CSSProperties = {
 
 const nameStyle: React.CSSProperties = {
   color: INK,
-  fontSize: "2.4cqw",
+  fontSize: "1.8cqw",
   fontWeight: 700,
   letterSpacing: "0.1cqw",
 };
