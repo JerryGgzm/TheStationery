@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BookshopScene, { type TimeOfDay } from "@/components/BookshopScene";
 import LoginWindow from "@/components/LoginWindow";
+import { LocaleProvider } from "@/lib/i18n";
 import { getSupabase } from "@/lib/supabase";
 
 // Full entry flow:
@@ -136,43 +137,45 @@ export default function BookshopApp() {
     phase === "intro" ? OUTSIDE_VIDEOS[timeOfDay] : DOOR_VIDEOS[timeOfDay];
 
   return (
-    <div style={rootStyle}>
-      {phase === "inside" && <BookshopScene initialTimeOfDay={timeOfDay} />}
+    <LocaleProvider>
+      <div style={rootStyle}>
+        {phase === "inside" && <BookshopScene initialTimeOfDay={timeOfDay} />}
 
-      {showVideo && (
-        <video
-          key={phase}
-          ref={videoRef}
-          src={videoSrc}
-          autoPlay
-          muted={muted}
-          playsInline
-          loop={phase === "intro"}
-          onEnded={phase === "opening" ? startReveal : undefined}
-          onError={phase === "opening" ? startReveal : undefined}
+        {showVideo && (
+          <video
+            key={phase}
+            ref={videoRef}
+            src={videoSrc}
+            autoPlay
+            muted={muted}
+            playsInline
+            loop={phase === "intro"}
+            onEnded={phase === "opening" ? startReveal : undefined}
+            onError={phase === "opening" ? startReveal : undefined}
+            style={{
+              ...videoStyle,
+              opacity: ready ? 1 : 0,
+              transition: "opacity 500ms ease",
+            }}
+          />
+        )}
+
+        {phase === "intro" && ready && <LoginWindow onEnter={handleEnter} />}
+
+        <div
+          aria-hidden
           style={{
-            ...videoStyle,
-            opacity: ready ? 1 : 0,
-            transition: "opacity 500ms ease",
+            position: "fixed",
+            inset: 0,
+            background: "#000000",
+            opacity: flash,
+            transition: `opacity ${flashMs}ms ease`,
+            pointerEvents: "none",
+            zIndex: 20,
           }}
         />
-      )}
-
-      {phase === "intro" && ready && <LoginWindow onEnter={handleEnter} />}
-
-      <div
-        aria-hidden
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "#000000",
-          opacity: flash,
-          transition: `opacity ${flashMs}ms ease`,
-          pointerEvents: "none",
-          zIndex: 20,
-        }}
-      />
-    </div>
+      </div>
+    </LocaleProvider>
   );
 }
 

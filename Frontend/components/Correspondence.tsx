@@ -28,6 +28,9 @@ import {
   type ConversationThread,
 } from "@/lib/api";
 import { sealFor } from "@/lib/derive";
+import { useT, type MessageKey } from "@/lib/i18n";
+
+type TFn = (key: MessageKey, vars?: Record<string, string | number>) => string;
 
 // The bookshelf behind the desk: past conversations grouped by the person you're
 // writing with. A brief sharp "pile of letters" splash fades into the sorted
@@ -79,9 +82,17 @@ function threadItems(thread: ConversationThread): ThreadItem[] {
   return items;
 }
 
-function correspondentName(b: Bundle): string {
+function correspondentName(b: Bundle, t: TFn): string {
   const c = b.correspondent;
-  return c.display_name || c.username || (c.type === "ai_character" ? "A reader" : "A stranger");
+  return (
+    c.display_name ||
+    c.username ||
+    (c.type === "ai_character" ? t("mail.aReader") : t("mail.aStranger"))
+  );
+}
+
+function letterCountLabel(n: number, t: TFn): string {
+  return n === 1 ? t("mail.letterCount", { n }) : t("mail.letterCountMany", { n });
 }
 
 type CView =
@@ -99,6 +110,7 @@ export default function Correspondence({
   onClose: () => void;
   onReplyPosted: () => void;
 }) {
+  const t = useT();
   const [view, setView] = useState<CView>({ kind: "bundles" });
   const [introGone, setIntroGone] = useState(false);
 
@@ -123,11 +135,11 @@ export default function Correspondence({
     let alive = true;
     getMailbox()
       .then((res) => alive && setBundles(res.bundles))
-      .catch((e) => alive && setLoadError(e?.message || "Couldn't load your shelf."));
+      .catch((e) => alive && setLoadError(e?.message || t("mail.loadFailed")));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [t]);
 
   const openBundle = useCallback(
     async (cid: string) => {
@@ -145,12 +157,12 @@ export default function Correspondence({
         const thread = await getConversation(cid);
         setThreads((prev) => ({ ...prev, [cid]: thread }));
       } catch (e) {
-        setThreadError((e as Error)?.message || "Couldn't open this bundle.");
+        setThreadError((e as Error)?.message || t("mail.openFailed"));
       } finally {
         setThreadLoading(false);
       }
     },
-    [threads],
+    [threads, t],
   );
 
   const post = useCallback(
@@ -161,12 +173,12 @@ export default function Correspondence({
         await postMessage(cid, text);
         onReplyPosted();
       } catch (e) {
-        setReplyError((e as Error)?.message || "Couldn't send your reply.");
+        setReplyError((e as Error)?.message || t("mail.replyFailed"));
       } finally {
         setPosting(false);
       }
     },
-    [onReplyPosted],
+    [onReplyPosted, t],
   );
 
   const bundleFor = (cid: string) => bundles?.find((b) => b.conversation_id === cid);
@@ -179,27 +191,27 @@ export default function Correspondence({
 
       {view.kind === "bundles" && (
         <div style={contentStyle}>
-          <BackLink label="Back to bookstore" onClick={onClose} />
+          <BackLink label={t("mail.backBookstore")} onClick={onClose} />
           <CloseButton onClose={onClose} />
           <header style={{ textAlign: "center", marginBottom: "3.5cqw" }}>
-            <h2 style={titleStyle}>Your correspondence</h2>
-            <p style={subtitleStyle}>Letters gathered by sender.</p>
+            <h2 style={titleStyle}>{t("mail.title")}</h2>
+            <p style={subtitleStyle}>{t("mail.subtitle")}</p>
           </header>
 
           {loadError ? (
             <p style={subtitleStyle}>{loadError}</p>
           ) : bundles === null ? (
-            <p style={subtitleStyle}>Sorting the shelf…</p>
+            <p style={subtitleStyle}>{t("mail.sorting")}</p>
           ) : bundles.length === 0 ? (
             <p style={subtitleStyle}>
-              No conversations yet. Reply to a letter to start one.
+              {t("mail.empty")}
             </p>
           ) : (
             <div style={gridStyle}>
               {bundles.map((b) => (
                 <BundleCard
                   key={b.conversation_id}
-                  name={correspondentName(b)}
+                  name={correspondentName(b, t)}
                   count={b.letter_count}
                   unread={b.unread_count}
                   tie={b.tie}
@@ -214,26 +226,24 @@ export default function Correspondence({
       {view.kind === "thread" &&
         (() => {
           const b = bundleFor(view.cid);
-          const name = b ? correspondentName(b) : "Conversation";
+          const name = b ? correspondentName(b, t) : "Conversation";
           const items = threads[view.cid] ? threadItems(threads[view.cid]) : [];
           return (
             <div style={contentStyle}>
               <BackLink
-                label="Back to bundles"
+                label={t("mail.backBundles")}
                 onClick={() => setView({ kind: "bundles" })}
               />
               <CloseButton onClose={onClose} />
               <header style={{ textAlign: "center", marginBottom: "3cqw" }}>
                 <h2 style={titleStyle}>{name}</h2>
-                <p style={subtitleStyle}>
-                  {items.length} {items.length === 1 ? "letter" : "letters"}
-                </p>
+                <p style={subtitleStyle}>{letterCountLabel(items.length, t)}</p>
               </header>
 
               {threadError ? (
                 <p style={subtitleStyle}>{threadError}</p>
               ) : threadLoading || !threads[view.cid] ? (
-                <p style={subtitleStyle}>Unfolding the bundle…</p>
+                <p style={subtitleStyle}>{t("mail.unfolding")}</p>
               ) : (
                 <div style={gridStyle}>
                   {items.map((it) => (
@@ -259,7 +269,7 @@ export default function Correspondence({
         (() => {
           const it = itemFor(view.cid, view.lid);
           const name = bundleFor(view.cid)
-            ? correspondentName(bundleFor(view.cid)!)
+            ? correspondentName(bundleFor(view.cid)!, t)
             : "conversation";
           return (
             <LetterDetail
@@ -280,7 +290,7 @@ export default function Correspondence({
         (() => {
           const it = itemFor(view.cid, view.lid);
           const name = bundleFor(view.cid)
-            ? correspondentName(bundleFor(view.cid)!)
+            ? correspondentName(bundleFor(view.cid)!, t)
             : "conversation";
           return (
             <LetterReply
@@ -336,6 +346,7 @@ function BundleCard({
   tie: TieKind;
   onOpen: () => void;
 }) {
+  const t = useT();
   const [hover, setHover] = useState(false);
   return (
     <button
@@ -363,9 +374,7 @@ function BundleCard({
 
       <div style={labelCardStyle}>
         <div style={nameStyle}>{name}</div>
-        <div style={letterCountStyle}>
-          {count} {count === 1 ? "letter" : "letters"}
-        </div>
+        <div style={letterCountStyle}>{letterCountLabel(count, t)}</div>
         <span style={{ ...openLinkStyle, ...(hover ? { color: INK } : null) }}>
           Open bundle
         </span>

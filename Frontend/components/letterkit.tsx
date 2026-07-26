@@ -5,6 +5,7 @@
 // here means both features render identical stationery and stay in sync.
 
 import { useCallback, useState } from "react";
+import { useT } from "@/lib/i18n";
 
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
 import { MAX_BODY } from "@/lib/limits";
@@ -63,10 +64,11 @@ export function Divider() {
 }
 
 export function CloseButton({ onClose }: { onClose: () => void }) {
+  const t = useT();
   return (
     <button
       type="button"
-      aria-label="返回书店"
+      aria-label={t("common.close")}
       onClick={onClose}
       style={closeSquareStyle}
       onMouseEnter={(e) => {
@@ -190,6 +192,7 @@ export function LetterCard({
   item: CardItem;
   onOpen: () => void;
 }) {
+  const t = useT();
   const [hover, setHover] = useState(false);
   return (
     <button
@@ -209,9 +212,11 @@ export function LetterCard({
 
       <p style={cardSummaryStyle}>
         <span style={{ color: RULE, marginRight: "1cqw" }}>{"\u2726"}</span>
-        {item.summary ?? "A letter waiting to be read."}
+        {item.summary ?? t("kit.waiting")}
       </p>
-      <span style={{ ...readLinkStyle, ...(hover ? { color: INK } : null) }}>Read letter</span>
+      <span style={{ ...readLinkStyle, ...(hover ? { color: INK } : null) }}>
+        {t("kit.readLetter")}
+      </span>
     </button>
   );
 }
@@ -235,14 +240,15 @@ export function LetterDetail({
   onReply: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   return (
     <div style={contentStyle}>
       <BackLink label={backLabel} onClick={onBack} />
       <CloseButton onClose={onClose} />
       <article style={{ ...sheetStyle, maxHeight: "90%" }}>
-        <h3 style={letterTitleStyle}>{title || "A letter"}</h3>
+        <h3 style={letterTitleStyle}>{title || t("common.aLetter")}</h3>
         <Divider />
-        <div style={letterBodyStyle}>{loading ? "Unfolding…" : body}</div>
+        <div style={letterBodyStyle}>{loading ? t("kit.unfolding") : body}</div>
         <Divider />
         <div style={{ display: "flex", justifyContent: "center", marginTop: "3cqw" }}>
           <button
@@ -251,7 +257,7 @@ export function LetterDetail({
             disabled={loading}
             style={amberButtonStyle(!loading)}
           >
-            Reply
+            {t("kit.reply")}
           </button>
         </div>
         <span style={foldStyle} aria-hidden />
@@ -283,6 +289,7 @@ export function LetterReply({
   posting?: boolean;
   error?: string | null;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const playKeyClick = useKeyClicks(TYPE_SFX);
 
@@ -304,20 +311,20 @@ export function LetterReply({
       <CloseButton onClose={onClose} />
       <div style={replyScrollStyle}>
         <article style={sheetStyle}>
-          <h3 style={letterTitleStyle}>{title || "A letter"}</h3>
+          <h3 style={letterTitleStyle}>{title || t("common.aLetter")}</h3>
           <Divider />
           <div style={letterBodyStyle}>{body}</div>
         </article>
 
         <article style={{ ...sheetStyle, marginTop: "3cqw" }}>
-          <h3 style={letterTitleStyle}>Your reply</h3>
+          <h3 style={letterTitleStyle}>{t("kit.yourReply")}</h3>
           <Divider />
           <textarea
             value={text}
             maxLength={MAX_BODY}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Write your reply…"
+            placeholder={t("kit.replyPlaceholder")}
             spellCheck={false}
             disabled={posting}
             style={replyTextareaStyle}
@@ -338,7 +345,7 @@ export function LetterReply({
                 disabled={posting}
                 style={cancelLinkStyle}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -346,7 +353,7 @@ export function LetterReply({
                 disabled={!canPost}
                 style={amberButtonStyle(canPost)}
               >
-                {posting ? "Sending…" : "Post reply"}
+                {posting ? t("common.sending") : t("kit.postReply")}
               </button>
             </div>
           </div>

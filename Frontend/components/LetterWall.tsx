@@ -21,6 +21,7 @@ import {
   type BoardDelivery,
   type OpenedLetter,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 // The letter-wall reading experience shown after the wall fade transition.
 // Three views over one dimmed, pixelated-blurred board backdrop:
@@ -44,6 +45,7 @@ export default function LetterWall({
   onClose: () => void;
   onReplyPosted: () => void;
 }) {
+  const t = useT();
   const [view, setView] = useState<View>({ kind: "list" });
 
   const [deliveries, setDeliveries] = useState<BoardDelivery[] | null>(null);
@@ -60,11 +62,11 @@ export default function LetterWall({
     let alive = true;
     getBoard()
       .then((res) => alive && setDeliveries(res.deliveries))
-      .catch((e) => alive && setLoadError(e?.message || "Couldn't load the wall."));
+      .catch((e) => alive && setLoadError(e?.message || t("wall.loadFailed")));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [t]);
 
   const open = useCallback(async (deliveryId: string) => {
     setView({ kind: "detail", deliveryId });
@@ -77,15 +79,15 @@ export default function LetterWall({
       setLetter({
         id: "",
         subject: null,
-        title: "Couldn't open this letter",
-        body: (e as Error)?.message || "Please try again.",
+        title: t("wall.openFailedTitle"),
+        body: (e as Error)?.message || t("wall.openFailedBody"),
         author_display: null,
         language_code: "en",
       });
     } finally {
       setLetterLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const post = useCallback(
     async (deliveryId: string, text: string) => {
@@ -95,13 +97,15 @@ export default function LetterWall({
         await replyToDelivery(deliveryId, text);
         onReplyPosted();
       } catch (e) {
-        setReplyError((e as Error)?.message || "Couldn't send your reply.");
+        setReplyError((e as Error)?.message || t("wall.replyFailed"));
       } finally {
         setPosting(false);
       }
     },
-    [onReplyPosted],
+    [onReplyPosted, t],
   );
+
+  const backLabel = t("wall.back");
 
   return (
     <div style={rootStyle}>
@@ -111,18 +115,16 @@ export default function LetterWall({
         <div style={contentStyle}>
           <CloseButton onClose={onClose} />
           <header style={{ textAlign: "center", marginBottom: "3cqw" }}>
-            <h2 style={titleStyle}>Letters on the wall</h2>
-            <p style={subtitleStyle}>Choose one to unfold.</p>
+            <h2 style={titleStyle}>{t("wall.title")}</h2>
+            <p style={subtitleStyle}>{t("wall.subtitle")}</p>
           </header>
 
           {loadError ? (
             <p style={subtitleStyle}>{loadError}</p>
           ) : deliveries === null ? (
-            <p style={subtitleStyle}>Gathering letters…</p>
+            <p style={subtitleStyle}>{t("wall.gathering")}</p>
           ) : deliveries.length === 0 ? (
-            <p style={subtitleStyle}>
-              The wall is quiet for now. Check back soon.
-            </p>
+            <p style={subtitleStyle}>{t("wall.empty")}</p>
           ) : (
             <div style={gridStyle}>
               {deliveries.map((d) => (
@@ -142,7 +144,7 @@ export default function LetterWall({
           title={letter?.title ?? null}
           body={letter?.body ?? ""}
           loading={letterLoading}
-          backLabel="Back to letters"
+          backLabel={backLabel}
           onBack={() => setView({ kind: "list" })}
           onReply={() => {
             setReplyError(null);
@@ -156,7 +158,7 @@ export default function LetterWall({
         <LetterReply
           title={letter?.title ?? null}
           body={letter?.body ?? ""}
-          backLabel="Back to letters"
+          backLabel={backLabel}
           onBack={() => setView({ kind: "list" })}
           onCancel={() => setView({ kind: "detail", deliveryId: view.deliveryId })}
           onClose={onClose}

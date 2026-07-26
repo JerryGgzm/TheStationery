@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import LocaleToggle from "@/components/LocaleToggle";
 import { ApiError, checkUsernamePublic, getMe, patchProfile, uploadAvatar } from "@/lib/api";
 import { USERNAME_RE, changePassword, logout, normalizeHandle } from "@/lib/auth";
+import { useT } from "@/lib/i18n";
 
 // Live username-availability states shown under the handle field.
 type HandleStatus = "idle" | "invalid" | "checking" | "available" | "taken" | "error";
@@ -37,6 +39,7 @@ export default function ProfilePanel({
 }: {
   onSave?: (data: ProfileData) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   // Committed values shown on the chip. Populated from GET /me on mount.
   const [profile, setProfile] = useState<ProfileData>({
@@ -62,7 +65,7 @@ export default function ProfilePanel({
     <>
       <button
         type="button"
-        aria-label="打开个人资料"
+        aria-label={t("profile.title")}
         onClick={() => setOpen(true)}
         // Keep the chip click from falling through to the scene hotspots.
         onPointerDown={(e) => e.stopPropagation()}
@@ -77,7 +80,7 @@ export default function ProfilePanel({
         <Avatar url={profile.avatarUrl} name={profile.username} size={34} />
         <span style={chipTextStyle}>
           <span style={chipNameStyle}>{profile.username}</span>
-          <span style={chipSubStyle}>Profile</span>
+          <span style={chipSubStyle}>{t("profile.chip")}</span>
         </span>
         <span style={chipCaretStyle} aria-hidden>
           {"\u25be"}
@@ -108,6 +111,7 @@ function ProfileModal({
   onClose: () => void;
   onSave: (data: ProfileData) => void;
 }) {
+  const t = useT();
   const [username, setUsername] = useState(profile.username);
   const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
@@ -167,7 +171,7 @@ function ProfileModal({
     const f = e.target.files?.[0];
     if (!f) return;
     if (!f.type.startsWith("image/")) {
-      setError("Please choose an image file.");
+      setError(t("profile.chooseImage"));
       return;
     }
     if (createdUrl.current) URL.revokeObjectURL(createdUrl.current);
@@ -176,16 +180,16 @@ function ProfileModal({
     setAvatarUrl(url);
     setAvatarFile(f);
     setError(null);
-  }, []);
+  }, [t]);
 
   const handleSave = useCallback(async () => {
     const handle = normalizeHandle(username);
     if (!USERNAME_RE.test(handle)) {
-      setError("Username: 3–20 letters, digits or _ (start with a letter).");
+      setError(t("profile.usernameFormat"));
       return;
     }
     if (handleStatus === "taken") {
-      setError("That username is already taken.");
+      setError(t("profile.usernameTaken"));
       return;
     }
     // Password is optional; only validate when the user is changing it.
@@ -195,7 +199,7 @@ function ProfileModal({
         return;
       }
       if (newPass !== confirm) {
-        setError("Passwords do not match.");
+        setError(t("profile.passwordsMismatch"));
         return;
       }
     }
@@ -225,13 +229,13 @@ function ProfileModal({
       onSave({ username: committedName, avatarUrl: committedAvatar });
     } catch (e) {
       if (e instanceof ApiError && e.code === "username_taken") {
-        setError("That username is already taken.");
+        setError(t("profile.usernameTaken"));
       } else {
-        setError((e as Error)?.message || "Couldn't save your changes.");
+        setError((e as Error)?.message || t("profile.saveFailed"));
       }
       setSaving(false);
     }
-  }, [username, handleStatus, newPass, confirm, avatarFile, avatarUrl, profile, onSave]);
+  }, [username, handleStatus, newPass, confirm, avatarFile, avatarUrl, profile, onSave, t]);
 
   // Sign out, then reload so the app returns to the intro / login window
   // (a fresh mount finds no session and shows LoginWindow).
@@ -241,10 +245,10 @@ function ProfileModal({
       await logout();
       window.location.reload();
     } catch (e) {
-      setError((e as Error)?.message || "Couldn't sign out.");
+      setError((e as Error)?.message || t("profile.signOutFailed"));
       setSigningOut(false);
     }
-  }, []);
+  }, [t]);
 
   return (
     <div
@@ -260,7 +264,7 @@ function ProfileModal({
 
         <button
           type="button"
-          aria-label="关闭"
+          aria-label={t("common.close")}
           onClick={onClose}
           style={closeStyle}
         >
@@ -268,13 +272,13 @@ function ProfileModal({
         </button>
 
         <div style={innerStyle}>
-          <h2 style={titleStyle}>Profile settings</h2>
-          <p style={subtitleStyle}>Update how you appear in the bookstore.</p>
+          <h2 style={titleStyle}>{t("profile.title")}</h2>
+          <p style={subtitleStyle}>{t("profile.subtitle")}</p>
 
           <div style={rowStyle}>
             {/* Portrait column */}
             <div style={portraitColStyle}>
-              <span style={sectionLabelStyle}>PORTRAIT</span>
+              <span style={sectionLabelStyle}>{t("profile.portrait")}</span>
               <div style={portraitFrameStyle}>
                 <Avatar url={avatarUrl} name={username} size={120} />
               </div>
@@ -290,14 +294,14 @@ function ProfileModal({
                 onClick={() => fileRef.current?.click()}
                 style={outlineButtonStyle}
               >
-                Upload portrait
+                {t("profile.upload")}
               </button>
             </div>
 
             {/* Fields column */}
             <div style={fieldsColStyle}>
               <label style={sectionLabelStyle}>
-                USERNAME
+                {t("profile.username")}
                 <input
                   type="text"
                   value={username}
@@ -313,6 +317,10 @@ function ProfileModal({
               </label>
               <HandleHint status={handleStatus} handle={handle} />
 
+              <div style={sectionLabelStyle}>
+                {t("profile.language")}
+                <LocaleToggle variant="panel" />
+              </div>
 
               <div style={dividerStyle}>
                 <span style={dividerLineStyle} />
@@ -320,9 +328,9 @@ function ProfileModal({
                 <span style={dividerLineStyle} />
               </div>
 
-              <span style={changePwHeadingStyle}>CHANGE PASSWORD</span>
+              <span style={changePwHeadingStyle}>{t("profile.changePassword")}</span>
               <label style={sectionLabelStyle}>
-                NEW PASSWORD
+                {t("profile.newPassword")}
                 <input
                   type="password"
                   value={newPass}
@@ -333,7 +341,7 @@ function ProfileModal({
                 />
               </label>
               <label style={sectionLabelStyle}>
-                CONFIRM PASSWORD
+                {t("profile.confirmPassword")}
                 <input
                   type="password"
                   value={confirm}
@@ -355,7 +363,7 @@ function ProfileModal({
               disabled={signingOut || saving}
               style={signOutStyle}
             >
-              {signingOut ? "Signing out…" : "Sign out"}
+              {signingOut ? t("profile.signingOut") : t("profile.signOut")}
             </button>
             <div style={footerRightStyle}>
               <button
@@ -364,7 +372,7 @@ function ProfileModal({
                 disabled={saving}
                 style={cancelStyle}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 type="button"
@@ -378,7 +386,7 @@ function ProfileModal({
                       : 1,
                 }}
               >
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? t("common.saving") : t("profile.save")}
               </button>
             </div>
           </div>
@@ -437,23 +445,36 @@ function Avatar({
 
 // Live availability line under the username field (mirrors the login window).
 function HandleHint({ status, handle }: { status: HandleStatus; handle: string }) {
+  const t = useT();
   const OK = "#8fbf6b";
   const DANGER = "#e0897f";
   switch (status) {
     case "invalid":
       return (
         <p style={{ ...hintStyle, color: DANGER }}>
-          3–20 chars, start with a letter (letters/digits/_).
+          {t("profile.handleInvalid")}
         </p>
       );
     case "checking":
-      return <p style={hintStyle}>Checking availability…</p>;
+      return <p style={hintStyle}>{t("profile.handleChecking")}</p>;
     case "available":
-      return <p style={{ ...hintStyle, color: OK }}>@{handle} is available.</p>;
+      return (
+        <p style={{ ...hintStyle, color: OK }}>
+          {t("profile.handleAvailable", { handle })}
+        </p>
+      );
     case "taken":
-      return <p style={{ ...hintStyle, color: DANGER }}>@{handle} is already taken.</p>;
+      return (
+        <p style={{ ...hintStyle, color: DANGER }}>
+          {t("profile.handleTaken", { handle })}
+        </p>
+      );
     default:
-      return <p style={hintStyle}>Others write to you with @{handle || "…"}.</p>;
+      return (
+        <p style={hintStyle}>
+          {t("profile.handleHint", { handle: handle || "…" })}
+        </p>
+      );
   }
 }
 

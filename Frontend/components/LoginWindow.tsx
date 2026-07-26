@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LocaleToggle from "@/components/LocaleToggle";
 import { login, normalizeHandle, register, USERNAME_RE } from "@/lib/auth";
 import { checkUsernamePublic } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 
 type Mode = "login" | "register";
 
@@ -13,6 +15,7 @@ type HandleStatus = "idle" | "invalid" | "checking" | "available" | "taken" | "e
 // On success `onEnter()` fires so the door-opening sequence can play. Register
 // runs Supabase signUp then bootstraps the profile via PATCH /me/profile.
 export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
+  const t = useT();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -41,7 +44,7 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
     }
     setHandleStatus("checking");
     let cancelled = false;
-    const t = window.setTimeout(async () => {
+    const timer = window.setTimeout(async () => {
       try {
         const { available } = await checkUsernamePublic(handle);
         if (!cancelled) setHandleStatus(available ? "available" : "taken");
@@ -53,16 +56,20 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
     }, 400);
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
     };
   }, [handle, mode]);
 
-  const handleOk = mode !== "register" || handleStatus === "available" || handleStatus === "error";
+  const handleOk =
+    mode !== "register" ||
+    handleStatus === "available" ||
+    handleStatus === "error";
 
   const canSubmit =
     email.trim().length > 0 &&
     password.length > 0 &&
-    (mode === "login" || (confirm.length > 0 && username.trim().length > 0 && handleOk)) &&
+    (mode === "login" ||
+      (confirm.length > 0 && username.trim().length > 0 && handleOk)) &&
     !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,11 +79,11 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
 
     if (mode === "register") {
       if (password !== confirm) {
-        setError("Passwords do not match.");
+        setError(t("login.passwordsMismatch"));
         return;
       }
       if (!USERNAME_RE.test(normalizeHandle(username))) {
-        setError("Username: 3–20 chars, start with a letter, letters/digits/_ only.");
+        setError(t("login.usernameFormat"));
         return;
       }
     }
@@ -90,7 +97,9 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
       }
       onEnter();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(
+        err instanceof Error ? err.message : t("common.somethingWrong"),
+      );
     } finally {
       setLoading(false);
     }
@@ -109,25 +118,27 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
         <i style={{ ...cornerStyle, bottom: 7, left: 7 }} />
         <i style={{ ...cornerStyle, bottom: 7, right: 7 }} />
 
+        <div style={localeWrapStyle}>
+          <LocaleToggle variant="panel" />
+        </div>
+
         <div style={innerStyle}>
           <EnvelopeIcon />
 
           <h1 style={titleStyle}>
-            {mode === "login" ? "Visit The Stationery" : "Join The Stationery"}
+            {mode === "login" ? t("login.titleVisit") : t("login.titleJoin")}
           </h1>
           <p style={subtitleStyle}>
-            {mode === "login"
-              ? "The bookstore has been waiting."
-              : "A quiet place for your words."}
+            {mode === "login" ? t("login.subVisit") : t("login.subJoin")}
           </p>
 
           <label style={labelStyle}>
-            EMAIL
+            {t("login.email")}
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t("login.emailPlaceholder")}
               autoComplete="email"
               style={inputStyle}
             />
@@ -135,7 +146,7 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
 
           {mode === "register" && (
             <label style={labelStyle}>
-              USERNAME
+              {t("login.username")}
               <div style={handleRowStyle}>
                 <span style={atStyle} aria-hidden>
                   @
@@ -143,14 +154,18 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
                 <input
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.replace(/^@+/, ""))}
-                  placeholder="yourname"
+                  onChange={(e) =>
+                    setUsername(e.target.value.replace(/^@+/, ""))
+                  }
+                  placeholder={t("login.usernamePlaceholder")}
                   autoComplete="username"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
                   maxLength={20}
-                  aria-invalid={handleStatus === "taken" || handleStatus === "invalid"}
+                  aria-invalid={
+                    handleStatus === "taken" || handleStatus === "invalid"
+                  }
                   style={{ ...inputStyle, flex: 1, minWidth: 0 }}
                 />
               </div>
@@ -159,20 +174,22 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
           )}
 
           <label style={labelStyle}>
-            PASSWORD
+            {t("login.password")}
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete={
+                mode === "login" ? "current-password" : "new-password"
+              }
               style={inputStyle}
             />
           </label>
 
           {mode === "register" && (
             <label style={labelStyle}>
-              CONFIRM PASSWORD
+              {t("login.confirmPassword")}
               <input
                 type="password"
                 value={confirm}
@@ -188,10 +205,10 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
 
           <button type="submit" disabled={!canSubmit} style={submitStyle(canSubmit)}>
             {loading
-              ? "One moment…"
+              ? t("common.loading")
               : mode === "login"
-                ? "Enter the Bookstore"
-                : "Create Account"}
+                ? t("login.enter")
+                : t("login.createAccount")}
           </button>
 
           <div style={dividerStyle}>
@@ -203,23 +220,31 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
           <p style={footerStyle}>
             {mode === "login" ? (
               <>
-                New here?{" "}
-                <button type="button" onClick={() => switchMode("register")} style={linkStyle}>
-                  Create an account
+                {t("login.newHere")}{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("register")}
+                  style={linkStyle}
+                >
+                  {t("login.createLink")}
                 </button>
               </>
             ) : (
               <>
-                Already have an account?{" "}
-                <button type="button" onClick={() => switchMode("login")} style={linkStyle}>
-                  Sign in
+                {t("login.alreadyHave")}{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  style={linkStyle}
+                >
+                  {t("login.signIn")}
                 </button>
               </>
             )}
           </p>
 
           <p style={supportStyle}>
-            Need help?{" "}
+            {t("login.needHelp")}{" "}
             <a href="mailto:support@xinstationary.com" style={linkStyle}>
               support@xinstationary.com
             </a>
@@ -230,21 +255,39 @@ export default function LoginWindow({ onEnter }: { onEnter: () => void }) {
   );
 }
 
-// Small hint / availability line under the register handle field.
-function HandleStatusLine({ status, handle }: { status: HandleStatus; handle: string }) {
+function HandleStatusLine({
+  status,
+  handle,
+}: {
+  status: HandleStatus;
+  handle: string;
+}) {
+  const t = useT();
   switch (status) {
     case "invalid":
-      return <span style={{ ...hintStyle, color: DANGER }}>3–20 chars, start with a letter (letters/digits/_).</span>;
+      return (
+        <span style={{ ...hintStyle, color: DANGER }}>
+          {t("login.handleInvalid")}
+        </span>
+      );
     case "checking":
-      return <span style={hintStyle}>Checking availability…</span>;
+      return <span style={hintStyle}>{t("login.handleChecking")}</span>;
     case "available":
-      return <span style={{ ...hintStyle, color: OK }}>@{handle} is available.</span>;
+      return (
+        <span style={{ ...hintStyle, color: OK }}>
+          {t("login.handleAvailable", { handle })}
+        </span>
+      );
     case "taken":
-      return <span style={{ ...hintStyle, color: DANGER }}>@{handle} is already taken.</span>;
+      return (
+        <span style={{ ...hintStyle, color: DANGER }}>
+          {t("login.handleTaken", { handle })}
+        </span>
+      );
     default:
       return (
         <span style={hintStyle}>
-          Others write to you with @{handle || "yourname"}.
+          {t("login.handleHint", { handle: handle || "yourname" })}
         </span>
       );
   }
@@ -300,6 +343,13 @@ const panelStyle: React.CSSProperties = {
   fontFamily: '"Courier New", ui-monospace, monospace',
 };
 
+const localeWrapStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 12,
+  right: 14,
+  zIndex: 2,
+};
+
 const cornerStyle: React.CSSProperties = {
   position: "absolute",
   width: 7,
@@ -316,7 +366,7 @@ const innerStyle: React.CSSProperties = {
 };
 
 const titleStyle: React.CSSProperties = {
-  margin: 0,
+  margin: "18px 0 0",
   textAlign: "center",
   color: CREAM,
   fontSize: 25,
@@ -403,7 +453,9 @@ const submitStyle = (enabled: boolean): React.CSSProperties => ({
     : "#7a7360",
   border: `1px solid ${enabled ? "#c9923f" : "#6b6452"}`,
   borderRadius: 5,
-  boxShadow: enabled ? "0 3px 0 0 #a9772f, 0 5px 10px rgba(0,0,0,0.35)" : "none",
+  boxShadow: enabled
+    ? "0 3px 0 0 #a9772f, 0 5px 10px rgba(0,0,0,0.35)"
+    : "none",
   cursor: enabled ? "pointer" : "not-allowed",
 });
 

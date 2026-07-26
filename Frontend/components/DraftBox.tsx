@@ -14,37 +14,43 @@ import {
 } from "@/components/letterkit";
 import { deleteLetter, listMyLetters, type MyLetter } from "@/lib/api";
 import { sealFor } from "@/lib/derive";
+import { useLocale, useT, type Locale, type MessageKey } from "@/lib/i18n";
 
 // The "Draft box" picker: a walnut drawer of saved drafts. Opened from the
 // Drafts icon on the writing desk. Each slip shows a title + "Edited X ago" and
 // a Continue action that loads the draft back into the writer. Drafts can also
 // be discarded (DELETE /letters/{id}).
 
+type TFn = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
 // A draft with no explicit title falls back to its opening line.
-function draftTitle(d: MyLetter): string {
+function draftTitle(d: MyLetter, t: TFn): string {
   if (d.subject && d.subject.trim()) return d.subject.trim();
   const firstLine = d.body.replace(/\s+/g, " ").trim();
-  if (!firstLine) return "Untitled letter";
+  if (!firstLine) return t("drafts.untitled");
   return firstLine.length > 48 ? `${firstLine.slice(0, 48).trimEnd()}…` : firstLine;
 }
 
-function editedLabel(iso: string | null): string {
+function editedLabel(iso: string | null, t: TFn, locale: Locale): string {
   if (!iso) return "";
   const d = new Date(iso);
   const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60) return "Edited just now";
+  if (diff < 60) return t("drafts.editedJustNow");
   if (diff < 3600) {
     const m = Math.floor(diff / 60);
-    return `Edited ${m} minute${m > 1 ? "s" : ""} ago`;
+    return t("drafts.editedMinutes", { n: m });
   }
   if (diff < 86400) {
     const h = Math.floor(diff / 3600);
-    return `Edited ${h} hour${h > 1 ? "s" : ""} ago`;
+    return t("drafts.editedHours", { n: h });
   }
   const days = Math.floor(diff / 86400);
-  if (days === 1) return "Edited yesterday";
-  if (days < 7) return `Edited ${days} days ago`;
-  return `Edited ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  if (days === 1) return t("drafts.editedYesterday");
+  if (days < 7) return t("drafts.editedDays", { n: days });
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  return t("drafts.editedOn", {
+    date: d.toLocaleDateString(dateLocale, { month: "short", day: "numeric" }),
+  });
 }
 
 export default function DraftBox({
@@ -54,6 +60,8 @@ export default function DraftBox({
   onClose: () => void;
   onContinue: (draft: MyLetter) => void;
 }) {
+  const t = useT();
+  const { locale } = useLocale();
   const [drafts, setDrafts] = useState<MyLetter[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -62,11 +70,11 @@ export default function DraftBox({
     let alive = true;
     listMyLetters("draft")
       .then((res) => alive && setDrafts(res.letters))
-      .catch((e) => alive && setError(e?.message || "Couldn't open the draft box."));
+      .catch((e) => alive && setError(e?.message || t("drafts.loadFailed")));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -82,39 +90,41 @@ export default function DraftBox({
       await deleteLetter(id);
       setDrafts((prev) => (prev ? prev.filter((d) => d.letter_id !== id) : prev));
     } catch (e) {
-      setError((e as Error)?.message || "Couldn't discard that draft.");
+      setError((e as Error)?.message || t("drafts.discardFailed"));
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [t]);
 
   return (
     <div style={backdropStyle} onClick={onClose} onPointerDown={(e) => e.stopPropagation()}>
       <div style={drawerStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
-          <button type="button" aria-label="关闭" onClick={onClose} style={closeStyle}>
+          <button type="button" aria-label={t("common.close")} onClick={onClose} style={closeStyle}>
             {"\u00d7"}
           </button>
-          <h2 style={titleStyle}>Draft box</h2>
-          <p style={subtitleStyle}>Choose a letter to continue.</p>
+          <h2 style={titleStyle}>{t("drafts.title")}</h2>
+          <p style={subtitleStyle}>{t("drafts.subtitle")}</p>
         </div>
 
         <div style={listStyle}>
           {error ? (
             <p style={emptyStyle}>{error}</p>
           ) : drafts === null ? (
-            <p style={emptyStyle}>Opening the drawer…</p>
+            <p style={emptyStyle}>{t("drafts.opening")}</p>
           ) : drafts.length === 0 ? (
-            <p style={emptyStyle}>No drafts yet. Half-written letters you tuck away land here.</p>
+            <p style={emptyStyle}>{t("drafts.empty")}</p>
           ) : (
             drafts.map((d) => (
               <div key={d.letter_id} style={slipStyle}>
                 <Seal kind={sealFor(d.letter_id)} />
                 <div style={slipTextStyle}>
-                  <div style={slipTitleStyle}>{draftTitle(d)}</div>
+                  <div style={slipTitleStyle}>{draftTitle(d, t)}</div>
                   <div style={slipMetaStyle}>
-                    {editedLabel(d.updated_at ?? d.created_at)}
-                    {d.recipient_username ? `  ·  to @${d.recipient_username}` : ""}
+                    {editedLabel(d.updated_at ?? d.created_at, t, locale)}
+                    {d.recipient_username
+                      ? `  ·  ${t("drafts.to", { handle: d.recipient_username })}`
+                      : ""}
                   </div>
                 </div>
                 <div style={slipActionsStyle}>
@@ -125,7 +135,7 @@ export default function DraftBox({
                     onMouseEnter={(e) => (e.currentTarget.style.color = INK)}
                     onMouseLeave={(e) => (e.currentTarget.style.color = INK_SOFT)}
                   >
-                    Continue
+                    {t("drafts.continue")}
                   </button>
                   <button
                     type="button"
@@ -133,7 +143,7 @@ export default function DraftBox({
                     disabled={busyId === d.letter_id}
                     style={discardStyle}
                   >
-                    {busyId === d.letter_id ? "…" : "Discard"}
+                    {busyId === d.letter_id ? "…" : t("drafts.discard")}
                   </button>
                 </div>
                 <span style={foldStyle} aria-hidden />

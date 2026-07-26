@@ -3,8 +3,9 @@ import "./globals.css";
 import ClickSound from "@/components/ClickSound";
 
 export const metadata: Metadata = {
-  title: "The Stationery — Pixel Bookshop",
-  description: "A cozy pixel bookshop where you write and receive letters.",
+  title: "见信 · The Stationery",
+  description:
+    "见信 — 一间安静的像素书店，写下并等待值得等候的信。A quiet pixel bookshop for letters worth the waiting.",
 };
 
 export default function RootLayout({

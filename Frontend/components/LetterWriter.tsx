@@ -7,6 +7,7 @@ import PixelBlurBg from "@/components/PixelBlurBg";
 import { useKeyClicks } from "@/lib/audio/useKeyClicks";
 import { ApiError, postLetter, saveDraft, type MyLetter } from "@/lib/api";
 import { USERNAME_RE, normalizeHandle } from "@/lib/auth";
+import { useT, type MessageKey } from "@/lib/i18n";
 import { MAX_BODY } from "@/lib/limits";
 
 // The letter-writing surface shown after the desk unfold animation.
@@ -19,6 +20,8 @@ const TYPE_SFX = "/assets/audio/sound_effect/打字声.MP3";
 // Longest @handle accepted in the "to" field (matches USERNAME_RE in lib/auth).
 const USERNAME_MAX = 20;
 
+type TFn = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
 export interface LetterDraft {
   text: string;
   // null when the letter is left for a stranger to find (public model).
@@ -26,25 +29,25 @@ export interface LetterDraft {
 }
 
 // Turn backend error codes into a short, human line shown under the sheet.
-function postErrorMessage(e: unknown): string {
+function postErrorMessage(e: unknown, t: TFn): string {
   if (e instanceof ApiError) {
     switch (e.code) {
       case "recipient_not_found":
-        return "No one goes by that @handle.";
+        return t("writer.err.recipientNotFound");
       case "recipient_self":
-        return "You can't write to yourself.";
+        return t("writer.err.recipientSelf");
       case "recipient_format":
-        return "Handle: 3–20 letters, digits or _.";
+        return t("writer.err.recipientFormat");
       case "safety_rejected":
-        return "This letter was held back by our gentle safety review.";
+        return t("writer.err.safety");
       case "rate_limited":
-        return "You've sent a lot of letters — please try again later.";
+        return t("writer.err.rateLimited");
       case "body_length":
-        return "A letter needs between 1 and 10000 characters.";
+        return t("writer.err.bodyLength");
     }
     return e.message;
   }
-  return (e as Error)?.message || "Couldn't send your letter. Please try again.";
+  return (e as Error)?.message || t("writer.err.generic");
 }
 
 // Warm paper / ink / walnut tokens (kept in sync with the login window).
@@ -66,6 +69,7 @@ export default function LetterWriter({
   onClose: () => void;
   onPost?: (draft: LetterDraft) => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [subject, setSubject] = useState("");
   const [to, setTo] = useState("");
@@ -108,10 +112,10 @@ export default function LetterWriter({
       // Save-and-close: tuck it away and return to the bookstore.
       onClose();
     } catch (e) {
-      setPostError(postErrorMessage(e));
+      setPostError(postErrorMessage(e, t));
       setSavingDraft(false);
     }
-  }, [text, subject, to, draftId, savingDraft, posting, onClose]);
+  }, [text, subject, to, draftId, savingDraft, posting, onClose, t]);
 
   const handlePost = useCallback(async () => {
     if (text.trim().length === 0 || posting) return;
@@ -132,10 +136,10 @@ export default function LetterWriter({
       });
       onPost?.({ text, recipient: handle || null });
     } catch (e) {
-      setPostError(postErrorMessage(e));
+      setPostError(postErrorMessage(e, t));
       setPosting(false);
     }
-  }, [text, subject, to, draftId, posting, onPost]);
+  }, [text, subject, to, draftId, posting, onPost, t]);
 
   // One keystroke → one click. Skip modifiers/navigation and shortcut combos.
   const handleKeyDown = useCallback(
@@ -161,7 +165,7 @@ export default function LetterWriter({
       <div style={paperStyle}>
         <button
           type="button"
-          aria-label="关闭"
+          aria-label={t("common.close")}
           onClick={onClose}
           style={closeStyle}
           onMouseEnter={(e) => {
@@ -174,7 +178,7 @@ export default function LetterWriter({
           {"\u00d7"}
         </button>
 
-        <h2 style={titleStyle}>Write a letter</h2>
+        <h2 style={titleStyle}>{t("writer.title")}</h2>
         <div style={dividerStyle} aria-hidden>
           <span style={dividerLineStyle} />
           <span style={dividerDiamondStyle} />
@@ -193,16 +197,16 @@ export default function LetterWriter({
               if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1)
                 playKeyClick();
             }}
-            placeholder="Title (optional)"
+            placeholder={t("writer.subjectPlaceholder")}
             spellCheck={false}
-            aria-label="Letter title"
+            aria-label={t("writer.subjectAria")}
             style={subjectInputStyle}
           />
         </div>
 
         {/* Address line — optional recipient handle. Blank = left for a stranger. */}
         <div style={toRowStyle}>
-          <span style={toLabelStyle}>To</span>
+          <span style={toLabelStyle}>{t("writer.to")}</span>
           <span style={toAtStyle} aria-hidden>
             @
           </span>
@@ -215,11 +219,11 @@ export default function LetterWriter({
               if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1)
                 playKeyClick();
             }}
-            placeholder="username (leave blank for a stranger)"
+            placeholder={t("writer.toPlaceholder")}
             spellCheck={false}
             autoCapitalize="none"
             autoCorrect="off"
-            aria-label="Recipient username"
+            aria-label={t("writer.toAria")}
             aria-invalid={recipientInvalid}
             style={toInputStyle(recipientInvalid)}
           />
@@ -231,7 +235,7 @@ export default function LetterWriter({
           maxLength={MAX_BODY}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Begin writing…"
+          placeholder={t("writer.bodyPlaceholder")}
           spellCheck={false}
           style={textareaStyle}
         />
@@ -241,9 +245,9 @@ export default function LetterWriter({
             {postError
               ? postError
               : recipientInvalid
-                ? "Handle: 3–20 letters, digits or _"
+                ? t("writer.handleFormat")
                 : savingDraft
-                  ? "Tucking into the drawer…"
+                  ? t("writer.tucking")
                   : `${text.length} / ${MAX_BODY}`}
           </span>
           <div style={actionsStyle}>
@@ -253,7 +257,7 @@ export default function LetterWriter({
               disabled={text.trim().length === 0 || savingDraft || posting}
               style={saveLinkStyle}
             >
-              Put in drafts
+              {t("writer.putInDrafts")}
             </button>
             <button
               type="button"
@@ -261,7 +265,7 @@ export default function LetterWriter({
               disabled={!canPost}
               style={postStyle(canPost)}
             >
-              {posting ? "Sending…" : "Post letter"}
+              {posting ? t("common.sending") : t("writer.post")}
             </button>
           </div>
         </div>
@@ -274,7 +278,7 @@ export default function LetterWriter({
         type="button"
         onClick={() => setDraftBoxOpen(true)}
         style={draftsIconStyle}
-        aria-label="打开草稿箱"
+        aria-label={t("writer.draftsAria")}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "translateY(-2px)";
         }}
@@ -286,7 +290,7 @@ export default function LetterWriter({
           <span style={draftsPapersStyle} />
           <span style={draftsHandleStyle} />
         </span>
-        <span style={draftsLabelStyle}>Drafts</span>
+        <span style={draftsLabelStyle}>{t("writer.drafts")}</span>
       </button>
 
       {draftBoxOpen && (

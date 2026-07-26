@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENE_WIDTH, SCENE_HEIGHT, type PixelManifest } from "@/lib/scene-layout";
 import { getMailbox } from "@/lib/api";
+import { useT } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n/messages";
 import LetterWriter from "@/components/LetterWriter";
 import LetterWall from "@/components/LetterWall";
 import Correspondence from "@/components/Correspondence";
@@ -16,10 +18,12 @@ const BG_VIDEOS: Record<TimeOfDay, string> = {
 };
 
 const BGM: Record<TimeOfDay, string> = {
-  night: "/assets/audio/background_music_night.mp3",
+  // Filename is `.MP3` (case-sensitive on Firebase Hosting).
+  night: "/assets/audio/background_music_night.MP3",
   day: "/assets/audio/background_music_day.mp3",
 };
-const BGM_VOLUME = 0.22;
+// Day/night bookstore BGM. Kept soft so dialogue and UI SFX stay clear.
+const BGM_VOLUME = 0.165; // was 0.22; user asked for ¾ of the original level
 const FADE_MS = 3000;
 
 // Clicking the desk plays this unfold animation, then opens the letter-writing
@@ -69,7 +73,7 @@ interface SceneLabel {
   x: number;
   y: number;
   icon: string;
-  text: string;
+  textKey: MessageKey;
   hover: Rect; // object region that reveals this hint
 }
 
@@ -80,7 +84,7 @@ const SCENE_LABELS: SceneLabel[] = [
     x: 96,
     y: 190,
     icon: "\u2709\uFE0E", // ✉
-    text: "Read letters",
+    textKey: "scene.readLetters",
     hover: { x: 8, y: 74, w: 130, h: 136 },
   },
   {
@@ -89,7 +93,7 @@ const SCENE_LABELS: SceneLabel[] = [
     x: 300,
     y: 246,
     icon: "\u2712\uFE0E", // ✒
-    text: "Write a letter",
+    textKey: "scene.writeLetter",
     hover: { x: 214, y: 188, w: 165, h: 112 },
   },
   {
@@ -100,7 +104,7 @@ const SCENE_LABELS: SceneLabel[] = [
     x: 330,
     y: 96,
     icon: "\u2263", // ≣ stacked lines → a shelf of letters
-    text: "\u4e66\u4fe1\u6765\u5f80",
+    textKey: "scene.correspondence",
     hover: { x: 234, y: 58, w: 190, h: 128 },
   },
 ];
@@ -118,6 +122,7 @@ export default function BookshopScene({
 }: {
   initialTimeOfDay?: TimeOfDay;
 }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -479,7 +484,10 @@ export default function BookshopScene({
             are waiting to be read. */}
         {unreadReplies > 0 && (
           <div
-            aria-label={`${unreadReplies} unread ${unreadReplies === 1 ? "reply" : "replies"}`}
+            aria-label={t(
+              unreadReplies === 1 ? "scene.unreadOne" : "scene.unreadMany",
+              { n: unreadReplies },
+            )}
             style={{
               position: "absolute",
               left: `${(412 / SCENE_WIDTH) * 100}%`,
@@ -518,7 +526,7 @@ export default function BookshopScene({
               }}
             >
               <span style={{ marginRight: 5, opacity: 0.85 }}>{l.icon}</span>
-              {l.text}
+              {t(l.textKey)}
             </div>
           );
         })}
@@ -526,7 +534,7 @@ export default function BookshopScene({
         <audio ref={audioRef} src={BGM[timeOfDay]} loop preload="auto" />
         <button
           type="button"
-          aria-label={audioOn ? "静音" : "开启音乐"}
+          aria-label={audioOn ? t("scene.mute") : t("scene.unmute")}
           onClick={() => setAudioOn((on) => !on)}
           style={{ ...cornerButtonStyle, right: 54 }}
           onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
@@ -536,8 +544,8 @@ export default function BookshopScene({
         </button>
         <button
           type="button"
-          aria-label={timeOfDay === "night" ? "切到白天" : "切到夜晚"}
-          onClick={() => setTimeOfDay((t) => (t === "night" ? "day" : "night"))}
+          aria-label={timeOfDay === "night" ? t("scene.toDay") : t("scene.toNight")}
+          onClick={() => setTimeOfDay((tod) => (tod === "night" ? "day" : "night"))}
           style={{ ...cornerButtonStyle, right: 12 }}
           onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
           onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.5")}
@@ -558,7 +566,7 @@ export default function BookshopScene({
             {/* Sharp still under the video for a seamless hand-off when it ends. */}
             <img
               src={LETTER_BG}
-              alt="Write a letter"
+              alt={t("scene.writeLetter")}
               style={{ ...layerStyle, objectFit: "cover", background: "#000", zIndex: 20 }}
             />
             <video
