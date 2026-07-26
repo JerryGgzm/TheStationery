@@ -1,8 +1,18 @@
 {
-  "hosting": {
-    "public": "out",
-    "cleanUrls": true,
-    "trailingSlash": false,
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
-  }
+  "hosting": [
+    {
+      "target": "prod",
+      "public": "out",
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    },
+    {
+      "target": "testing",
+      "public": "out",
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    }
+  ]
 }

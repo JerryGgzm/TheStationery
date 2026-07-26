@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "stationary-503105"
-  }
+  },
+  "targets": {
+    "stationary-503105": {
+      "hosting": {
+        "prod": [
+          "stationary-503105"
+        ],
+        "testing": [
+          "thestationery-testing"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

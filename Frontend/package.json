@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "deploy": "next build && npx -y firebase-tools deploy --only hosting"
+    "deploy": "node scripts/deploy-hosting.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
