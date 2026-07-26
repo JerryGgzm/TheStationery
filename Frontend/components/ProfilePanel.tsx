@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, getMe, patchProfile, uploadAvatar } from "@/lib/api";
+import { ApiError, checkUsernamePublic, getMe, patchProfile, uploadAvatar } from "@/lib/api";
 import { USERNAME_RE, changePassword, logout, normalizeHandle } from "@/lib/auth";
+
+// Live username-availability states shown under the handle field.
+type HandleStatus = "idle" | "invalid" | "checking" | "available" | "taken" | "error";
 
 // Top-left pixel profile chip + "Profile settings" modal.
 // Styling mirrors the login window (navy panel, gold border + corner squares).
@@ -106,6 +109,7 @@ function ProfileModal({
   onSave: (data: ProfileData) => void;
 }) {
   const [username, setUsername] = useState(profile.username);
+  const [handleStatus, setHandleStatus] = useState<HandleStatus>("idle");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPass, setNewPass] = useState("");
@@ -128,6 +132,37 @@ function ProfileModal({
     };
   }, [onClose]);
 
+  // Debounced live availability check. The user's own current handle is always
+  // fine (unchanged), so only a *different* handle is checked against the server.
+  const handle = normalizeHandle(username);
+  const currentHandle = normalizeHandle(profile.username);
+  useEffect(() => {
+    if (!handle || handle === currentHandle) {
+      setHandleStatus("idle");
+      return;
+    }
+    if (!USERNAME_RE.test(handle)) {
+      setHandleStatus("invalid");
+      return;
+    }
+    setHandleStatus("checking");
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const { available } = await checkUsernamePublic(handle);
+        if (!cancelled) setHandleStatus(available ? "available" : "taken");
+      } catch {
+        // Couldn't reach the check — don't block saving; the server validates
+        // uniqueness again on PATCH.
+        if (!cancelled) setHandleStatus("error");
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [handle, currentHandle]);
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -147,6 +182,10 @@ function ProfileModal({
     const handle = normalizeHandle(username);
     if (!USERNAME_RE.test(handle)) {
       setError("Username: 3–20 letters, digits or _ (start with a letter).");
+      return;
+    }
+    if (handleStatus === "taken") {
+      setError("That username is already taken.");
       return;
     }
     // Password is optional; only validate when the user is changing it.
@@ -192,7 +231,7 @@ function ProfileModal({
       }
       setSaving(false);
     }
-  }, [username, newPass, confirm, avatarFile, avatarUrl, profile, onSave]);
+  }, [username, handleStatus, newPass, confirm, avatarFile, avatarUrl, profile, onSave]);
 
   // Sign out, then reload so the app returns to the intro / login window
   // (a fresh mount finds no session and shows LoginWindow).
@@ -272,7 +311,8 @@ function ProfileModal({
                   style={inputStyle}
                 />
               </label>
-              <p style={hintStyle}>Others write to you with @{username || "…"}.</p>
+              <HandleHint status={handleStatus} handle={handle} />
+
 
               <div style={dividerStyle}>
                 <span style={dividerLineStyle} />
@@ -329,8 +369,14 @@ function ProfileModal({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
-                style={{ ...saveStyle, opacity: saving ? 0.7 : 1 }}
+                disabled={saving || handleStatus === "taken" || handleStatus === "checking"}
+                style={{
+                  ...saveStyle,
+                  opacity:
+                    saving || handleStatus === "taken" || handleStatus === "checking"
+                      ? 0.6
+                      : 1,
+                }}
               >
                 {saving ? "Saving…" : "Save changes"}
               </button>
@@ -387,6 +433,28 @@ function Avatar({
       {(name.trim()[0] || "?").toUpperCase()}
     </div>
   );
+}
+
+// Live availability line under the username field (mirrors the login window).
+function HandleHint({ status, handle }: { status: HandleStatus; handle: string }) {
+  const OK = "#8fbf6b";
+  const DANGER = "#e0897f";
+  switch (status) {
+    case "invalid":
+      return (
+        <p style={{ ...hintStyle, color: DANGER }}>
+          3–20 chars, start with a letter (letters/digits/_).
+        </p>
+      );
+    case "checking":
+      return <p style={hintStyle}>Checking availability…</p>;
+    case "available":
+      return <p style={{ ...hintStyle, color: OK }}>@{handle} is available.</p>;
+    case "taken":
+      return <p style={{ ...hintStyle, color: DANGER }}>@{handle} is already taken.</p>;
+    default:
+      return <p style={hintStyle}>Others write to you with @{handle || "…"}.</p>;
+  }
 }
 
 const chipStyle: React.CSSProperties = {

@@ -604,6 +604,9 @@ on conflict (id) do nothing;
 -- bucket (security linter 0025). Reads happen via the public object URL only.
 
 -- A user may write/replace/delete only files under their own uid folder.
+-- `drop ... if exists` keeps this section idempotent when re-run on an existing
+-- project (e.g. to repair a database created before these policies existed).
+drop policy if exists "avatars_owner_insert" on storage.objects;
 create policy "avatars_owner_insert"
   on storage.objects for insert to authenticated
   with check (
@@ -611,6 +614,7 @@ create policy "avatars_owner_insert"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+drop policy if exists "avatars_owner_update" on storage.objects;
 create policy "avatars_owner_update"
   on storage.objects for update to authenticated
   using (
@@ -622,6 +626,7 @@ create policy "avatars_owner_update"
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
+drop policy if exists "avatars_owner_delete" on storage.objects;
 create policy "avatars_owner_delete"
   on storage.objects for delete to authenticated
   using (
