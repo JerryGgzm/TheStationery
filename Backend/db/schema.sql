@@ -599,9 +599,19 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
--- No SELECT policy: a public bucket serves objects by URL without one, and
--- adding a broad `for select` policy would let clients LIST every file in the
--- bucket (security linter 0025). Reads happen via the public object URL only.
+-- Owner-scoped SELECT policy: the Storage API reads the row back after a
+-- successful upload (INSERT … RETURNING), so a user needs SELECT on their OWN
+-- objects or every upload fails with "new row violates row-level security
+-- policy". Scoping to the uid folder means a client can list only its own
+-- files, not the whole bucket (avoids the broad-list concern of linter 0025).
+-- Public read-by-URL still works without any policy (that path skips RLS).
+drop policy if exists "avatars_owner_select" on storage.objects;
+create policy "avatars_owner_select"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
 -- A user may write/replace/delete only files under their own uid folder.
 -- `drop ... if exists` keeps this section idempotent when re-run on an existing
