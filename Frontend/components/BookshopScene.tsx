@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENE_WIDTH, SCENE_HEIGHT, type PixelManifest } from "@/lib/scene-layout";
-import { getBoard } from "@/lib/api";
+import { getMailbox } from "@/lib/api";
 import LetterWriter from "@/components/LetterWriter";
 import LetterWall from "@/components/LetterWall";
 import Correspondence from "@/components/Correspondence";
@@ -100,7 +100,7 @@ const SCENE_LABELS: SceneLabel[] = [
     x: 330,
     y: 96,
     icon: "\u2263", // ≣ stacked lines → a shelf of letters
-    text: "Past letters",
+    text: "\u4e66\u4fe1\u6765\u5f80",
     hover: { x: 234, y: 58, w: 190, h: 128 },
   },
 ];
@@ -134,8 +134,9 @@ export default function BookshopScene({
   const [wallOpen, setWallOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [veil, setVeil] = useState(0); // black transition veil for the wall view
-  // Unread-reply flag driving the pixel red dot pinned to the letter wall.
-  const [hasUnreadReply, setHasUnreadReply] = useState(false);
+  // Count of unread replies across all bundles, driving the red dot + number
+  // pinned to the "书信来往" (correspondence) shelf.
+  const [unreadReplies, setUnreadReplies] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const deskVideoRef = useRef<HTMLVideoElement>(null);
   const sentVideoRef = useRef<HTMLVideoElement>(null);
@@ -258,22 +259,22 @@ export default function BookshopScene({
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, []);
 
-  // Show the red dot when the wall holds an unread reply to the user. Re-checked
-  // whenever the wall is closed (opening it marks replies read server-side).
+  // Total unread replies for the shelf red dot. Re-checked whenever the shelf is
+  // closed (opening a bundle marks its replies read server-side).
   useEffect(() => {
-    if (wallOpen) return;
+    if (shelfOpen) return;
     let alive = true;
-    getBoard()
-      .then(
-        (res) =>
-          alive &&
-          setHasUnreadReply(res.deliveries.some((d) => d.is_reply && !d.opened)),
-      )
+    getMailbox()
+      .then((res) => {
+        if (!alive) return;
+        const total = res.bundles.reduce((n, b) => n + (b.unread_count || 0), 0);
+        setUnreadReplies(total);
+      })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [wallOpen]);
+  }, [shelfOpen]);
 
   // Clicking the desk opens the letter-writing screen; clicking the letter wall
   // opens the wall of letters. Ignore clicks that land on the cat (it meows) so
@@ -474,22 +475,25 @@ export default function BookshopScene({
           }}
         />
 
-        {/* Pixel red dot pinned to the letter wall when a reply is waiting. */}
-        {hasUnreadReply && (
+        {/* Pixel red dot + count pinned to the correspondence shelf when replies
+            are waiting to be read. */}
+        {unreadReplies > 0 && (
           <div
-            aria-label="You have a new reply"
+            aria-label={`${unreadReplies} unread ${unreadReplies === 1 ? "reply" : "replies"}`}
             style={{
               position: "absolute",
-              left: `${(124 / SCENE_WIDTH) * 100}%`,
-              top: `${(84 / SCENE_HEIGHT) * 100}%`,
+              left: `${(412 / SCENE_WIDTH) * 100}%`,
+              top: `${(70 / SCENE_HEIGHT) * 100}%`,
               transform: "translate(-50%, -50%)",
               zIndex: 4,
               pointerEvents: "none",
               ...replyDotStyle,
             }}
-          />
+          >
+            {unreadReplies > 9 ? "9+" : unreadReplies}
+          </div>
         )}
-        <style>{`@keyframes replyDotPulse { 0%,100% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.82); } }`}</style>
+        <style>{`@keyframes replyDotPulse { 0%,100% { opacity: 1; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 0.72; transform: translate(-50%,-50%) scale(0.9); } }`}</style>
 
         {SCENE_LABELS.map((l) => {
           const isHover = hovered === l.id;
@@ -627,15 +631,25 @@ export default function BookshopScene({
   );
 }
 
-// Pixel-art notification dot: a small hard-edged red square with a dark border
-// and offset shadow, gently pulsing so a new reply catches the eye.
+// Pixel-art notification badge: a hard-edged red chip with a dark border, an
+// offset shadow, and the unread count, gently pulsing so a new reply is noticed.
 const replyDotStyle: React.CSSProperties = {
-  width: 13,
-  height: 13,
+  minWidth: 20,
+  height: 20,
+  padding: "0 4px",
+  boxSizing: "border-box",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   background: "#d63b28",
+  color: "#fff3e6",
   border: "2px solid #7c2318",
   borderRadius: 0,
   boxShadow: "2px 2px 0 0 rgba(0,0,0,0.5), 0 0 8px rgba(214,59,40,0.7)",
+  fontFamily: '"Courier New", ui-monospace, monospace',
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: 1,
   animation: "replyDotPulse 1.6s ease-in-out infinite",
 };
 

@@ -77,6 +77,26 @@ async def list_for_conversation(
     )
 
 
+async def mark_conversation_read(
+    conn: asyncpg.Connection, conversation_id: str, reader_user_id: str
+) -> None:
+    """Mark every delivered message the reader received (i.e. not sent by them)
+    in this conversation as read. Idempotent — already-read rows are untouched."""
+    await conn.execute(
+        """
+        update public.messages
+        set read_at = now()
+        where conversation_id = $1
+          and read_at is null
+          and delivered_at is not null
+          and deleted_at is null
+          and not (sender_type = 'user' and sender_user_id = $2)
+        """,
+        conversation_id,
+        reader_user_id,
+    )
+
+
 async def deliver_due(conn: asyncpg.Connection, limit: int = 500) -> list[asyncpg.Record]:
     """Flip scheduled messages whose time has come to 'delivered'."""
     return await conn.fetch(

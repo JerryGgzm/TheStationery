@@ -132,6 +132,12 @@ export default function Correspondence({
   const openBundle = useCallback(
     async (cid: string) => {
       setView({ kind: "thread", cid });
+      // Opening the bundle marks its replies read server-side, so clear the dot.
+      setBundles((prev) =>
+        prev?.map((b) =>
+          b.conversation_id === cid ? { ...b, unread_count: 0 } : b,
+        ) ?? prev,
+      );
       if (threads[cid]) return;
       setThreadLoading(true);
       setThreadError(null);
@@ -195,6 +201,7 @@ export default function Correspondence({
                   key={b.conversation_id}
                   name={correspondentName(b)}
                   count={b.letter_count}
+                  unread={b.unread_count}
                   tie={b.tie}
                   onOpen={() => openBundle(b.conversation_id)}
                 />
@@ -319,11 +326,13 @@ export default function Correspondence({
 function BundleCard({
   name,
   count,
+  unread,
   tie,
   onOpen,
 }: {
   name: string;
   count: number;
+  unread: number;
   tie: TieKind;
   onOpen: () => void;
 }) {
@@ -340,6 +349,15 @@ function BundleCard({
       <span style={{ ...stackLayerStyle, transform: "rotate(-3deg) translate(-4%, 3%)" }} />
       <span style={{ ...stackLayerStyle, transform: "rotate(2.5deg) translate(4%, -2%)" }} />
       <span style={stackTopStyle} />
+
+      {unread > 0 && (
+        <span
+          aria-label={`${unread} unread`}
+          style={unreadBadgeStyle}
+        >
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
 
       <BundleTieMark kind={tie} />
 
@@ -410,6 +428,28 @@ const bundleStyle: React.CSSProperties = {
 
 const bundleHoverStyle: React.CSSProperties = {
   transform: "translateY(-3px)",
+};
+
+// Pixel-art unread badge sitting on the bundle's top-right corner.
+const unreadBadgeStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "0.5cqw",
+  right: "1.5cqw",
+  zIndex: 5,
+  minWidth: "3.4cqw",
+  height: "3.4cqw",
+  padding: "0 0.8cqw",
+  boxSizing: "border-box",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#d63b28",
+  color: "#fff3e6",
+  border: "1px solid #7c2318",
+  boxShadow: "1.5px 1.5px 0 0 rgba(0,0,0,0.45)",
+  fontSize: "1.9cqw",
+  fontWeight: 700,
+  lineHeight: 1,
 };
 
 // Envelope-toned paper making up the stack body.

@@ -42,6 +42,7 @@ async def get_mailbox(pool: asyncpg.Pool, user_id: str) -> dict:
             "conversation_id": str(r["conversation_id"]),
             "correspondent": _correspondent(r),
             "letter_count": r["message_count"],
+            "unread_count": r["unread_count"],
             "last_message_at": r["last_message_at"].isoformat(),
             "tie": derive.tie_for(str(r["conversation_id"])),
         }
@@ -61,6 +62,8 @@ async def get_conversation(
             raise ForbiddenError("Not your conversation", code="not_participant")
         root = await letters_repo.get_by_id(conn, str(conversation["root_letter_id"]))
         messages = await messages_repo.list_for_conversation(conn, conversation_id)
+        # Opening the thread counts as reading it — clear the unread badge.
+        await messages_repo.mark_conversation_read(conn, conversation_id, user_id)
 
     def _msg(m: asyncpg.Record) -> dict:
         mine = (

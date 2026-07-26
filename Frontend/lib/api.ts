@@ -253,6 +253,8 @@ export interface Bundle {
   conversation_id: string;
   correspondent: Correspondent;
   letter_count: number;
+  // Unread replies from the correspondent (messages the user hasn't opened).
+  unread_count: number;
   last_message_at: string;
   tie: BundleTie;
 }

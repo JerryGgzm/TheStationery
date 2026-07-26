@@ -105,7 +105,12 @@ async def list_for_user(
                where m.conversation_id = c.id and m.deleted_at is null
                  and not (m.sender_type = 'user' and m.sender_user_id = $1))
             + case when c.letter_author_user_id = $1 then 0 else 1 end
-          ) as message_count
+          ) as message_count,
+          -- Delivered messages from the other party the user hasn't opened yet.
+          (select count(*) from public.messages m
+             where m.conversation_id = c.id and m.deleted_at is null
+               and m.delivered_at is not null and m.read_at is null
+               and not (m.sender_type = 'user' and m.sender_user_id = $1)) as unread_count
         from public.conversations c
         left join public.profiles p
           on p.user_id = (case when c.letter_author_user_id = $1

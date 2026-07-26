@@ -39,8 +39,10 @@ async def fetch_candidate_letters(
 ) -> list[asyncpg.Record]:
     """Directed-to-me letters first, then the oldest unseen public letters.
 
-    Excludes the viewer's own letters, anything already delivered to them, and
-    letters from/to blocked users.
+    The wall is for first contact only: it excludes the viewer's own letters,
+    anything already delivered to them, letters from/to blocked users, and
+    letters from anyone the viewer already has a conversation with (those live in
+    the correspondence shelf, not the wall).
     """
     return await conn.fetch(
         """
@@ -56,6 +58,11 @@ async def fetch_candidate_letters(
           and not exists (
                 select 1 from public.letter_deliveries d
                 where d.viewer_user_id = $1 and d.letter_id = l.id
+          )
+          and not exists (
+                select 1 from public.conversations c
+                where (c.letter_author_user_id = $1 and c.responder_user_id = l.author_user_id)
+                   or (c.responder_user_id = $1 and c.letter_author_user_id = l.author_user_id)
           )
           and not exists (
                 select 1 from public.user_blocks b
